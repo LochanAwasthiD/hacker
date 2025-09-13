@@ -1,0 +1,21 @@
+<% layout('layouts/boilerplate') %>
+<div class="container">
+  <div class="row justify-content-center">
+    <div class="col-lg-7 mt-5 mb-5">
+      <form class="info-card" method="POST" action="/wizard/healthinplication" data-aos="fade-up">
+        <h3 class="fw-bold text-center mb-5" style="color: var(--primary-color);">
+          Do you have any health implications?
+        </h3>
+        <p class="text-muted text-center mb-4">
+          Mention injuries/conditions so we keep your workout safe.
+        </p>
+        <div class="mb-4">
+          <textarea class="form-control form-control-lg" name="constraints" rows="4" placeholder="e.g., knee pain, high blood pressure"></textarea>
+        </div>
+        <div class="d-grid gap-2">
+          <button class="btn btn-primary btn-lg" type="submit">Next</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

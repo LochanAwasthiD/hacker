@@ -1,0 +1,253 @@
+<% layout('layouts/boilerplate') %>
+
+<!-- Hero (full-bleed gradient, responsive two-column) -->
+<section class="hero-section gradient-bg text-white">
+  <div class="container py-5 py-lg-7">
+    <div class="row g-5 align-items-center">
+      <!-- Left: headline + cta -->
+      <div class="col-12 col-lg-6" data-aos="fade-right">
+        <h1 class="display-4 fw-bold mb-4">Fit in 5–15 Minutes a Day</h1>
+        <p class="lead mb-4">
+          Personalized micro-workouts tailored to your fitness level, schedule, and goals. No equipment needed!
+        </p>
+        <div class="d-flex flex-wrap gap-3">
+          <a href="#auth-section" class="btn btn-accent btn-lg rounded-pill px-4">Start Now</a>
+          <a href="#how-it-works" class="btn btn-outline-light btn-lg rounded-pill px-4">Learn More</a>
+        </div>
+      </div>
+
+      <!-- Right: auth card -->
+      <div class="col-12 col-lg-6" data-aos="fade-left" id="auth-section">
+        <div class="auth-card bg-white text-dark overflow-hidden shadow-sm rounded-4">
+          <div class="row g-0">
+            <!-- Left side blurb (hidden on small) -->
+            <div class="col-md-6 d-none d-md-flex">
+              <div class="h-100 d-flex align-items-center p-5" style="background-color: rgba(30,41,59,.05);">
+                <div>
+                  <h3 class="fw-bold mb-4">Start Your Fitness Journey Today</h3>
+                  <p class="mb-4">Join thousands who’ve transformed their health with micro-workouts.</p>
+                  <ul class="list-unstyled mb-0">
+                    <li class="mb-2"><i data-feather="check" class="me-2 text-success"></i> Personalized plans</li>
+                    <li class="mb-2"><i data-feather="check" class="me-2 text-success"></i> No equipment needed</li>
+                    <li class="mb-2"><i data-feather="check" class="me-2 text-success"></i> Progress tracking</li>
+                    <li class="mb-0"><i data-feather="check" class="me-2 text-success"></i> Expert guidance</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tabs + forms -->
+            <div class="col-md-6">
+              <div class="p-4 p-lg-5">
+                <ul class="nav auth-tabs nav-underline mb-4" id="authTabs" role="tablist">
+                  <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="login-tab" data-bs-toggle="tab" data-bs-target="#login" type="button" role="tab">Login</button>
+                  </li>
+                  <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="signup-tab" data-bs-toggle="tab" data-bs-target="#signup" type="button" role="tab">Sign Up</button>
+                  </li>
+                </ul>
+
+                <div class="tab-content" id="authTabsContent">
+                  <!-- Login -->
+                  <div class="tab-pane fade show active" id="login" role="tabpanel" aria-labelledby="login-tab">
+                    <form action="/auth/login" method="POST" autocomplete="on" novalidate>
+                      <div class="mb-3">
+                        <label for="loginEmail" class="form-label">Email address</label>
+                        <input type="email" class="form-control" id="loginEmail" name="email" placeholder="you@example.com" autocomplete="email" required />
+                      </div>
+                      <div class="mb-3">
+                        <label for="loginPassword" class="form-label">Password</label>
+                        <input type="password" class="form-control" id="loginPassword" name="password" placeholder="••••••••" autocomplete="current-password" minlength="6" required />
+                      </div>
+
+                      <div class="d-flex justify-content-between align-items-center mb-4">
+                        <div class="form-check">
+                          <input class="form-check-input" type="checkbox" id="rememberMe" />
+                          <label class="form-check-label" for="rememberMe">Remember me</label>
+                        </div>
+                        <a href="#" class="text-decoration-none">Forgot password?</a>
+                      </div>
+
+                      <button type="submit" class="btn btn-primary w-100 mb-3">Login</button>
+
+                      <div class="divider">or continue with</div>
+                      <div class="d-flex gap-3">
+                        <button type="button" class="btn btn-outline-secondary flex-grow-1">
+                          <i data-feather="github" class="me-2"></i> GitHub
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary flex-grow-1">
+                          <i data-feather="google" class="me-2"></i> Google
+                        </button>
+                      </div>
+                   
+                  </div>
+
+                  <!-- Sign up -->
+                  <div class="tab-pane fade" id="signup" role="tabpanel" aria-labelledby="signup-tab">
+                    <form action="/auth/signup" method="POST" autocomplete="on" novalidate>
+                      <div class="mb-3">
+                        <label for="signupName" class="form-label">Full Name</label>
+                        <input type="text" class="form-control" id="signupName" name="name" placeholder="Your name" autocomplete="name" required />
+                      </div>
+                      <div class="mb-3">
+                        <label for="signupEmail" class="form-label">Email address</label>
+                        <input type="email" class="form-control" id="signupEmail" name="email" placeholder="you@example.com" autocomplete="email" required />
+                      </div>
+                      <div class="mb-3">
+                        <label for="signupPassword" class="form-label">Password</label>
+                        <input type="password" class="form-control" id="signupPassword" name="password" placeholder="Create a password" autocomplete="new-password" minlength="6" required />
+                      </div>
+                      <div class="mb-4">
+                        <label for="signupConfirmPassword" class="form-label">Confirm Password</label>
+                        <input type="password" class="form-control" id="signupConfirmPassword" name="confirmPassword" placeholder="Confirm your password" autocomplete="new-password" minlength="6" required />
+                      </div>
+
+                      <div class="form-check mb-4">
+                        <input class="form-check-input" type="checkbox" id="termsAgreement" required />
+                        <label class="form-check-label" for="termsAgreement">
+                          I agree to the <a href="#" class="text-decoration-none">Terms of Service</a> and
+                          <a href="#" class="text-decoration-none">Privacy Policy</a>
+                        </label>
+                      </div>
+
+                      <button type="submit" class="btn btn-primary w-100 mb-3">Create Account</button>
+
+                      <div class="divider">or sign up with</div>
+                      <div class="d-flex gap-3">
+                        <button type="button" class="btn btn-outline-secondary flex-grow-1">
+                          <i data-feather="github" class="me-2"></i> GitHub
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary flex-grow-1">
+                          <i data-feather="google" class="me-2"></i> Google
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div> <!-- /.tab-content -->
+              </div>
+            </div>
+          </div> <!-- /.row g-0 -->
+        </div> <!-- /.auth-card -->
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Features -->
+<section id="features" class="py-5 py-lg-7 bg-white">
+  <div class="container">
+    <div class="text-center mb-5" data-aos="fade-up">
+      <h2 class="fw-bold mb-3" style="color:#007bff">Why Choose Micro-Workout?</h2>
+      <p class="text-muted mx-auto" style="max-width:600px">Our science-backed approach helps you stay consistent with fitness, even with a busy schedule.</p>
+    </div>
+    <div class="row g-4">
+      <div class="col-md-4" data-aos="fade-up" data-aos-delay="100">
+        <div class="text-center p-4 h-100">
+          <div class="feature-icon mx-auto"><i data-feather="zap" width="24" height="24"></i></div>
+          <h5 class="fw-bold mb-3" style="color:#007bff">Quick & Effective</h5>
+          <p class="text-muted">5–15 minute workouts designed to maximize results in minimal time.</p>
+        </div>
+      </div>
+      <div class="col-md-4" data-aos="fade-up" data-aos-delay="200">
+        <div class="text-center p-4 h-100">
+          <div class="feature-icon mx-auto"><i data-feather="user" width="24" height="24"></i></div>
+          <h5 class="fw-bold mb-3" style="color:#007bff">Personalized Plans</h5>
+          <p class="text-muted">Customized for your level, age, health considerations, and equipment.</p>
+        </div>
+      </div>
+      <div class="col-md-4" data-aos="fade-up" data-aos-delay="300">
+        <div class="text-center p-4 h-100">
+          <div class="feature-icon mx-auto"><i data-feather="trending-up" width="24" height="24"></i></div>
+          <h5 class="fw-bold mb-3" style="color:#007bff">Progress Tracking</h5>
+          <p class="text-muted">Monitor improvements and stay motivated with our intuitive dashboard.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- How It Works -->
+<section id="how-it-works" class="py-5 py-lg-7 bg-light">
+  <div class="container">
+    <div class="text-center mb-5" data-aos="fade-up">
+      <h2 class="fw-bold mb-3">How It Works</h2>
+      <p class="text-muted mx-auto" style="max-width:600px">Get your personalized micro-workout plan in just a few steps</p>
+    </div>
+    <div class="row g-4">
+      <div class="col-lg-6" data-aos="fade-right">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-body p-4 p-lg-5 d-flex">
+            <div class="me-4">
+              <div class="bg-primary bg-opacity-10 text-primary rounded-circle p-3 d-flex align-items-center justify-content-center" style="width:50px;height:50px;">
+                <span class="fw-bold">1</span>
+              </div>
+            </div>
+            <div>
+              <h5 class="fw-bold mb-3" style="color:#007bff">Tell Us About Yourself</h5>
+              <p class="text-muted">Quick assessment about your level, goals, available time, and any health considerations.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-6" data-aos="fade-left" data-aos-delay="100">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-body p-4 p-lg-5 d-flex">
+            <div class="me-4">
+              <div class="bg-primary bg-opacity-10 text-primary rounded-circle p-3 d-flex align-items-center justify-content-center" style="width:50px;height:50px;">
+                <span class="fw-bold">2</span>
+              </div>
+            </div>
+            <div>
+              <h5 class="fw-bold mb-3" style="color:#007bff">Get Your Custom Plan</h5>
+              <p class="text-muted">Our Gemini-powered engine crafts a micro-workout routine tailored to your needs.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-6" data-aos="fade-right" data-aos-delay="200">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-body p-4 p-lg-5 d-flex">
+            <div class="me-4">
+              <div class="bg-primary bg-opacity-10 text-primary rounded-circle p-3 d-flex align-items-center justify-content-center" style="width:50px;height:50px;">
+                <span class="fw-bold">3</span>
+              </div>
+            </div>
+            <div>
+              <h5 class="fw-bold mb-3" style="color:#007bff">Work Out Anytime</h5>
+              <p class="text-muted">Follow daily micro-workouts with form tips—no gym required.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-6" data-aos="fade-left" data-aos-delay="300">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-body p-4 p-lg-5 d-flex">
+            <div class="me-4">
+              <div class="bg-primary bg-opacity-10 text-primary rounded-circle p-3 d-flex align-items-center justify-content-center" style="width:50px;height:50px;">
+                <span class="fw-bold">4</span>
+              </div>
+            </div>
+            <div>
+              <h5 class="fw-bold mb-3" style="color:#007bff">Track & Improve</h5>
+              <p class="text-muted">Monitor progress and get recommendations for advancement.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Testimonials -->
+<section id="testimonials" class="py-5 py-lg-7 bg-white">
+  <div class="container">
+    <div class="text-center mb-5" data-aos="fade-up">
+      <h2 class="fw-bold mb-3" style="color:#007bff">Success Stories</h2>
+      <p class="text-muted mx-auto" style="max-width:600px">Don’t just take our word for it—hear from our community</p>
+    </div>
+    <div class="row g-4">
+      <!-- Your 3 cards here -->
+    </div>
+  </div>
+</section>

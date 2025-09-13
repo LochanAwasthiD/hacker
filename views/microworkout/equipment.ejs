@@ -1,0 +1,18 @@
+<% layout('layouts/boilerplate') %>
+<div class="container">
+  <div class="row justify-content-center">
+    <div class="col-lg-7 mt-5 mb-5">
+      <form class="info-card" method="POST" action="/wizard/equipment" data-aos="fade-up">
+        <h3 class="fw-bold text-center mb-5" style="color: var(--primary-color);">
+          Do you have any workout equipment?
+        </h3>
+        <label class="form-label text-muted">Comma-separated list (e.g., dumbbells, bands, yoga mat)</label>
+        <textarea class="form-control form-control-lg mb-4" name="equipment" rows="3" placeholder="Type here..."></textarea>
+        <div class="d-grid gap-2">
+          <button class="btn btn-primary btn-lg" type="submit">Continue</button>
+          <button class="btn btn-link text-muted" name="equipment" value="" type="submit">I don't have any equipment</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

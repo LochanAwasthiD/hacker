@@ -1,0 +1,44 @@
+<% layout('layouts/boilerplate') %>
+<div class="container">
+  <div class="row justify-content-center">
+    <div class="col-lg-8">
+      <div class="text-center mb-5 mt-5" data-aos="fade-up">
+        <h3>Please select your primary fitness goal.</h3>
+      </div>
+      <form method="POST" action="/wizard/primaryfitnessgoal">
+        <div class="row g-4 justify-content-center">
+          <div class="col-md-4 col-sm-6" data-aos="fade-up" data-aos-delay="100">
+            <button class="goal-card btn w-100" type="submit" name="goal" value="Weight Loss/Fat Burn">
+              <div class="goal-icon mb-2"><i data-feather="monitor" width="30" height="30"></i></div>
+              <h5 class="fw-bold mb-0" style="color:#1A73E8;">Weight Loss /<br>Fat Burn</h5>
+            </button>
+          </div>
+          <div class="col-md-4 col-sm-6" data-aos="fade-up" data-aos-delay="200">
+            <button class="goal-card btn w-100" type="submit" name="goal" value="Muscle Gain/Strength">
+              <div class="goal-icon mb-2"><i data-feather="zap" width="30" height="30"></i></div>
+              <h5 class="fw-bold mb-0" style="color:#1A73E8;">Muscle Gain /<br>Strength</h5>
+            </button>
+          </div>
+          <div class="col-md-4 col-sm-6" data-aos="fade-up" data-aos-delay="300">
+            <button class="goal-card btn w-100" type="submit" name="goal" value="Endurance/Cardio">
+              <div class="goal-icon mb-2"><i data-feather="heart" width="30" height="30"></i></div>
+              <h5 class="fw-bold mb-0" style="color:#1A73E8;">Endurance /<br>Cardio</h5>
+            </button>
+          </div>
+          <div class="col-md-4 col-sm-6" data-aos="fade-up" data-aos-delay="400">
+            <button class="goal-card btn w-100" type="submit" name="goal" value="Flexibility/Mobility">
+              <div class="goal-icon mb-2"><i data-feather="anchor" width="30" height="30"></i></div>
+              <h5 class="fw-bold mb-0" style="color:#1A73E8;">Flexibility /<br>Mobility</h5>
+            </button>
+          </div>
+          <div class="col-md-4 col-sm-6" data-aos="fade-up" data-aos-delay="500">
+            <button class="goal-card btn w-100" type="submit" name="goal" value="Core Strength/Stability">
+              <div class="goal-icon mb-2"><i data-feather="target" width="30" height="30"></i></div>
+              <h5 class="fw-bold mb-0" style="color:#1A73E8;">Core Strength /<br>Stability</h5>
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

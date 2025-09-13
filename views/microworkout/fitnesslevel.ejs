@@ -1,0 +1,25 @@
+<% layout('layouts/boilerplate') %>
+<div class="container">
+  <div class="row justify-content-center">
+    <div class="col-lg-7">
+      <div class="text-center mb-5" data-aos="fade-up">
+        <h2 class="fw-bold mb-3">Got it!</h2>
+        <h3>Now select your fitness level.</h3>
+      </div>
+      <form method="POST" action="/wizard/fitnesslevel" class="d-flex flex-column gap-4">
+        <button class="level-card btn text-start" name="level" value="beginner">
+          <h4 class="level-title">Beginner</h4>
+          <p class="level-description mb-0">Learn safe, simple workouts you can stick with.</p>
+        </button>
+        <button class="level-card btn text-start" name="level" value="intermediate">
+          <h4 class="level-title">Intermediate</h4>
+          <p class="level-description mb-0">Keep workouts fresh and balanced.</p>
+        </button>
+        <button class="level-card btn text-start" name="level" value="advanced">
+          <h4 class="level-title">Advanced</h4>
+          <p class="level-description mb-0">Micro-challenges for time-crunched days.</p>
+        </button>
+      </form>
+    </div>
+  </div>
+</div>

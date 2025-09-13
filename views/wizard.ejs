@@ -1,0 +1,68 @@
+<% layout('layouts/boilerplate') %>
+
+<% if (s.state === 'INTAKE') { %>
+<div class="card bg-black border-secondary">
+  <div class="card-body">
+    <h2 class="h4 mb-3">Tell us about your goal</h2>
+    <form action="/wizard/intake" method="POST" class="vstack gap-3">
+      <div>
+        <label class="form-label">Goal</label>
+        <input class="form-control bg-dark text-light" name="goal" placeholder="Build muscle, lose fat, run 5k..." required>
+      </div>
+      <div>
+        <label class="form-label">Level</label>
+        <select class="form-select bg-dark text-light" name="level">
+          <option>beginner</option><option>intermediate</option><option>advanced</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Constraints (optional)</label>
+        <input class="form-control bg-dark text-light" name="constraints" placeholder="knee pain, no equipment, 20 min">
+      </div>
+      <div class="row">
+        <div class="col-md-6">
+          <label class="form-label">Days / Week</label>
+          <input class="form-control bg-dark text-light" type="number" name="daysPerWeek" min="2" max="7" value="3">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Equipment (comma-separated)</label>
+          <input class="form-control bg-dark text-light" name="equipment" placeholder="dumbbells, bands">
+        </div>
+      </div>
+      <button class="btn btn-primary btn-lg" type="submit">Next →</button>
+    </form>
+  </div>
+</div>
+<% } %>
+
+<% if (s.state === 'TIPS') { %>
+<div class="vstack gap-3">
+  <div class="d-flex gap-2">
+    <button id="btnGenTips" class="btn btn-primary">Generate Tips</button>
+    <form action="/wizard/accept-tips" method="POST"><button class="btn btn-success">Accept → Plan</button></form>
+  </div>
+  <div id="tipsBox" class="card bg-black border-secondary d-none">
+    <div class="card-body"><div id="tipsContent" class="vstack gap-2"></div></div>
+  </div>
+</div>
+<% } %>
+
+<% if (s.state === 'PLAN') { %>
+<div class="vstack gap-3">
+  <div class="d-flex gap-2">
+    <button id="btnGenPlan" class="btn btn-primary">Generate 4-Week Plan</button>
+    <form action="/wizard/accept-plan" method="POST"><button class="btn btn-success">Accept Plan → Finish</button></form>
+  </div>
+  <div id="planBox" class="card bg-black border-secondary d-none">
+    <div class="card-body">
+      <pre id="planJSON" class="text-secondary small mb-3"></pre>
+      <div id="planTable"></div>
+    </div>
+  </div>
+</div>
+<% } %>
+
+<% if (s.state === 'DONE') { %>
+<div class="alert alert-success">🎉 All set! You can restart anytime.</div>
+<a class="btn btn-outline-light" href="/wizard">Restart</a>
+<% } %>

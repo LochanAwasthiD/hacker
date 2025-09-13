@@ -1,0 +1,23 @@
+<% layout('layouts/boilerplate') %>
+<div class="container py-5">
+  <div class="row justify-content-center">
+    <div class="col-lg-6">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body p-4 p-lg-5">
+          <h2 class="h4 mb-4">Tell us about you</h2>
+          <form action="/wizard/name-age" method="POST" class="vstack gap-3">
+            <div>
+              <label class="form-label">Full Name</label>
+              <input class="form-control" type="text" name="name" value="<%= user?.name || '' %>" required>
+            </div>
+            <div>
+              <label class="form-label">Age</label>
+              <input class="form-control" type="number" name="age" min="10" max="100" value="<%= user?.age || '' %>" required>
+            </div>
+            <button class="btn btn-primary ms-auto" type="submit">Continue →</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
