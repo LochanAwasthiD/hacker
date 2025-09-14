@@ -1,0 +1,43 @@
+<% layout('layouts/boilerplate') %>
+<div class="container py-5">
+  <div class="row justify-content-center">
+    <div class="col-lg-6 text-center">
+      <div class="card border-0 shadow-sm p-5">
+        <div class="spinner-border text-primary mb-3" role="status" aria-hidden="true"></div>
+        <h3 class="mb-2">Generating your plan…</h3>
+        <p class="text-muted">This usually takes a few seconds.</p>
+        <div id="err" class="alert alert-danger d-none mt-3">Could not generate plan. Try again.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(async () => {
+  // 1) kick off generation (idempotent if it already ran)
+  try {
+    await fetch('/ai/plan', { method: 'POST', headers: { 'Accept': 'application/json' } });
+  } catch(_) { /* ignore; we'll still poll */ }
+
+  // 2) poll for readiness
+  const started = Date.now();
+  const timeoutMs = 60_000;
+
+  const tick = async () => {
+    if (Date.now() - started > timeoutMs) {
+      document.getElementById('err').classList.remove('d-none');
+      return;
+    }
+    try {
+      const r = await fetch('/wizard/status');
+      const j = await r.json();
+      if (j.ok && j.state === 'PLAN_READY') {
+        window.location.href = '/wizard/output';
+        return;
+      }
+    } catch(_) {}
+    setTimeout(tick, 1200);
+  };
+  tick();
+})();
+</script>

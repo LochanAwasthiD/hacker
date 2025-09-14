@@ -1,27 +1,22 @@
-<!-- 
-    <div class="container py-5">
-        <div class="row justify-content-center">
-            <div class="col-lg-10">
-                <div class="workout-output-card" data-aos="fade-up">
-                    <h2 class="text-center fw-bold mb-4" style="color: var(--primary-color);">Your Custom Micro-Workout!</h2>
-                    <p class="text-center text-muted mb-5">Here's a personalized plan based on your preferences. Enjoy!</p>
-                    
-                    <div id="workouts-container">
-                    </div>
+<% layout('layouts/boilerplate') %>
 
-                    <div class="text-center mt-5">
-                        <button class="btn btn-primary btn-lg rounded-pill px-5" onclick="generateNewWorkout()">Generate New Workout <i data-feather="refresh-cw" class="ms-2"></i></button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div> -->
-
-   <% layout('layouts/boilerplate') %>
+<style>
+  /* media fit + skeleton */
+  .mw-media { height: 190px; object-fit: cover; }
+  .mw-skel {
+    background: linear-gradient(90deg,#0b0c10 25%,#1a1f2b 37%,#0b0c10 63%);
+    background-size: 400% 100%;
+    animation: mwShimmer 1.3s infinite linear;
+  }
+  @keyframes mwShimmer { 0%{background-position:100% 0} 100%{background-position:-100% 0} }
+  /* alternating clipping feel */
+  .mw-left  { border-top-left-radius: 1rem !important;  border-bottom-left-radius: 1rem !important; }
+  .mw-right { border-top-right-radius: 1rem !important; border-bottom-right-radius: 1rem !important; }
+</style>
 
 <div class="container my-5">
-  <h1 class="mb-3">Your <%= plan.weeks || 4 %>-Week Plan</h1>
-  <p class="text-muted">Days/Week: <strong><%= plan.daysPerWeek || s.daysPerWeek || 3 %></strong></p>
+  <h1 class="mb-1">Your <%= plan.weeks || 4 %>-Week Plan</h1>
+  <p class="text-muted">Days/Week: <strong><%= plan.daysPerWeek || s?.daysPerWeek || 3 %></strong></p>
 
   <% if (plan.medicalNote) { %>
     <div class="alert alert-warning">⚠️ <%= plan.medicalNote %></div>
@@ -29,31 +24,89 @@
 
   <% if (Array.isArray(plan.plan) && plan.plan.length) { %>
     <div class="vstack gap-4">
-      <% plan.plan.forEach((d,i) => { %>
+      <% plan.plan.forEach((d, i) => { %>
         <div class="workout-section">
-          <h4 class="mb-1"><%= d.day || ('Day ' + (i+1)) %></h4>
-          <p class="duration-text">~ <strong><%= d.durationMin || 0 %></strong> min</p>
+          <div class="d-flex align-items-center justify-content-between flex-wrap mb-2">
+            <div>
+              <h4 class="mb-1"><%= d.day || ('Day ' + (i+1)) %></h4>
+              <p class="duration-text mb-0">~ <strong><%= d.durationMin || 0 %></strong> min</p>
+            </div>
+            <div class="d-flex gap-2">
+              <% if (d.warmup) { %><span class="badge bg-success">Warmup</span><% } %>
+              <% if (d.finisher) { %><span class="badge bg-info text-dark">Finisher</span><% } %>
+              <% if (d.cooldown) { %><span class="badge bg-secondary">Cooldown</span><% } %>
+            </div>
+          </div>
 
-          <% if (d.warmup) { %><p><strong>Warmup:</strong> <%= d.warmup %></p><% } %>
-          <% if (Array.isArray(d.workout)) { %>
-            <ul>
-              <% d.workout.forEach(w => { %>
-                <li>
-                  <%= w.exercise %>
-                  <% if (w.sets) { %> — <%= w.sets %> sets<% } %>
-                  <% if (w.reps) { %> × <%= w.reps %><% } %>
-                  <% if (typeof w.rir !== 'undefined') { %> (RIR: <%= w.rir %>)<% } %>
-                  <!-- quick video search link -->
-                  <a class="ms-2" target="_blank" rel="noopener"
-                     href="https://www.youtube.com/results?search_query=<%= encodeURIComponent((w.exercise || '') + ' proper form') %>">
-                    video ↗
-                  </a>
-                </li>
-              <% }) %>
-            </ul>
+          <% if (d.warmup) { %>
+            <p class="mb-3"><strong>Warmup:</strong> <%= d.warmup %></p>
           <% } %>
-          <% if (d.finisher) { %><p><strong>Finisher:</strong> <%= d.finisher %></p><% } %>
-          <% if (d.cooldown) { %><p><strong>Cooldown:</strong> <%= d.cooldown %></p><% } %>
+
+          <% if (Array.isArray(d.workout) && d.workout.length) { %>
+            <div class="row g-4">
+              <% d.workout.forEach((w, j) => { 
+                const clip = (j % 2 === 0) ? 'mw-left' : 'mw-right';
+              %>
+                <div class="col-12 col-md-6 col-lg-4">
+                  <div class="card h-100 shadow-sm">
+                    <% 
+                      let embedUrl = null;
+                      if (w?.videoUrl) {
+                        if (w.videoUrl.includes('/watch?v=')) {
+                          try { embedUrl = 'https://www.youtube.com/embed/' + w.videoUrl.split('v=')[1].split('&')[0]; } catch(e){}
+                        } else if (w.videoUrl.includes('youtu.be/')) {
+                          try { embedUrl = 'https://www.youtube.com/embed/' + w.videoUrl.split('youtu.be/')[1].split(/[?&]/)[0]; } catch(e){}
+                        }
+                      }
+                    %>
+
+                    <% if (w?.gifUrl) { %>
+                      <img class="card-img-top mw-media <%= clip %>" src="<%= w.gifUrl %>" alt="<%= w.exercise %> gif">
+                    <% } else if (w?.image) { %>
+                      <img class="card-img-top mw-media <%= clip %>" src="<%= w.image %>" alt="<%= w.exercise %>">
+                    <% } else if (embedUrl) { %>
+                      <div class="ratio ratio-16x9 <%= clip %>">
+                        <iframe
+                          src="<%= embedUrl %>"
+                          title="<%= w.exercise %> video"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                          allowfullscreen
+                          loading="lazy"
+                          style="border-radius: inherit;"
+                        ></iframe>
+                      </div>
+                    <% } else { %>
+                      <!-- placeholder that will be replaced by a live GIF via /ai/gif if API key exists -->
+                      <img class="card-img-top mw-media mw-skel <%= clip %>" data-gif-query="<%= w.exercise %>" alt="Preview loading…">
+                    <% } %>
+
+                    <div class="card-body d-flex flex-column">
+                      <h5 class="card-title mb-2"><%= w.exercise %></h5>
+                      <ul class="list-unstyled small text-muted mb-3">
+                        <% if (w.sets) { %><li><strong>Sets:</strong> <%= w.sets %></li><% } %>
+                        <% if (w.reps) { %><li><strong>Reps:</strong> <%= w.reps %></li><% } %>
+                        <% if (typeof w.rir !== 'undefined') { %><li><strong>RIR:</strong> <%= w.rir %></li><% } %>
+                      </ul>
+
+                      <div class="mt-auto d-flex gap-2 flex-wrap">
+                        <a class="btn btn-sm btn-primary" target="_blank" rel="noopener"
+                           href="<%= w.videoUrl || ('https://www.youtube.com/results?search_query=' + encodeURIComponent((w.exercise||'') + ' proper form')) %>">
+                          Watch video
+                        </a>
+                        <a class="btn btn-sm btn-outline-secondary" target="_blank" rel="noopener"
+                           href="<%= w.gifSearch || ('https://giphy.com/search/' + encodeURIComponent(w.exercise||'')) %>">
+                          View GIFs
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              <% }) %>
+            </div>
+          <% } %>
+
+          <% if (d.finisher) { %><p class="mt-3 mb-1"><strong>Finisher:</strong> <%= d.finisher %></p><% } %>
+          <% if (d.cooldown) { %><p class="mb-0"><strong>Cooldown:</strong> <%= d.cooldown %></p><% } %>
         </div>
       <% }) %>
     </div>
@@ -62,12 +115,34 @@
   <% } %>
 
   <% if (plan.progression) { %>
-    <div class="mt-4 p-3 border rounded">
+    <div class="mt-4 p-3 border rounded bg-white text-dark">
       <strong>Progression:</strong> <%= plan.progression %>
     </div>
   <% } %>
 
-  <div class="mt-4">
-    <a class="btn btn-outline-light" href="/wizard/fitnessgoal">Make new plan</a>
+  <div class="mt-4 d-flex gap-2">
+    <a class="btn btn-primary" href="/wizard/fitnessgoal">Make another plan</a>
+    <a class="btn btn-outline-light" href="/wizard/duration">Adjust duration/days</a>
   </div>
 </div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', async () => {
+    if (window.feather && window.feather.replace) window.feather.replace();
+
+    // fill placeholders with a live GIF if /ai/gif is available
+    const placeholders = [...document.querySelectorAll('img[data-gif-query]')];
+    for (const img of placeholders) {
+      const q = img.dataset.gifQuery || '';
+      if (!q) continue;
+      try {
+        const r = await fetch('/ai/gif?q=' + encodeURIComponent(q));
+        const j = await r.json();
+        if (j.ok && j.url) {
+          img.src = j.url;
+          img.classList.remove('mw-skel');
+        }
+      } catch (_) { /* keep skeleton on failures */ }
+    }
+  });
+</script>

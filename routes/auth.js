@@ -1,3 +1,4 @@
+// routes/auth.js
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const passport = require('passport');
@@ -5,7 +6,7 @@ const User = require('../models/user');
 
 const router = express.Router();
 
-// ----- SIGNUP -----
+// SIGNUP → save user → auto-login → go to name-age
 router.post('/signup', async (req, res) => {
   try {
     let { name, email, password, confirmPassword } = req.body;
@@ -23,7 +24,6 @@ router.post('/signup', async (req, res) => {
 
     req.login(user, (err) => {
       if (err) return res.redirect('/?msg=Auto-login+failed#auth-section');
-      // ensure session is persisted before redirecting
       req.session.save(() => res.redirect('/wizard/name-age'));
     });
   } catch (e) {
@@ -32,21 +32,19 @@ router.post('/signup', async (req, res) => {
   }
 });
 
-// ----- LOGIN -----
+// LOGIN → go to name-age
 router.post('/login', (req, res, next) => {
   passport.authenticate('local', (err, user) => {
     if (err) return next(err);
     if (!user) return res.redirect('/?msg=Invalid+credentials#auth-section');
-
     req.logIn(user, (e2) => {
       if (e2) return next(e2);
-      // always land on the name+age page after login
       req.session.save(() => res.redirect('/wizard/name-age'));
     });
   })(req, res, next);
 });
 
-// ----- LOGOUT -----
+// LOGOUT
 router.get('/logout', (req, res, next) => {
   req.logout(err => err ? next(err) : req.session.destroy(() => res.redirect('/')));
 });

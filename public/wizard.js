@@ -59,7 +59,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
 
-
   
 });// public/wizard.js
 (() => {

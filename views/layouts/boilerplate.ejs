@@ -1,4 +1,3 @@
-<!-- views/layouts/boilerplate.ejs -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -11,15 +10,25 @@
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/home.css">
 </head>
-<body class="d-flex flex-column min-vh-100"> <!-- ✅ makes sticky footer easy -->
-  <body data-auth="<%= !!currentUser %>"></body>
+<body data-auth="<%= currentUser ? 'true' : 'false' %>">
   <%- include('../include/nav') %>
 
-  <main class="container-fluid p-0 flex-grow-1"> <!-- ✅ fills space between nav & footer -->
+  <% if (q && (q.msg || q.sub)) { %>
+    <div class="container mt-3">
+      <div class="alert <%= q.sub==='ok' ? 'alert-success' : (q.sub==='invalid' ? 'alert-warning' : q.msg||q.sub ? 'alert-danger':'alert-info') %> py-2">
+        <%= q.msg ? q.msg.replace(/\+/g,' ') :
+            (q.sub==='ok'?'Thanks! Check your inbox.':
+             q.sub==='invalid'?'Enter a valid email.':
+             q.sub ? 'Something went wrong.' : '') %>
+      </div>
+    </div>
+  <% } %>
+
+  <main class="container-fluid p-0">
     <%- body %>
   </main>
 
-  <%- include('../include/footer') %> <!-- ✅ footer only here, once -->
+  <%- include('../include/footer') %>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" defer></script>
   <script src="https://unpkg.com/feather-icons" defer></script>
