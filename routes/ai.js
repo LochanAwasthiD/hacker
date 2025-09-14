@@ -3,7 +3,25 @@ const express = require('express');
 const Session = require('../models/Session');
 const router = express.Router();
 
-const MODEL = process.env.MODEL || 'gemini-2.5-flash';
+/* =========================
+   Model + resilience config
+   ========================= */
+const DEFAULT_MODEL = process.env.MODEL || 'gemini-2.5-flash';
+const FALLBACK_MODELS = (process.env.GEMINI_FALLBACK_MODELS || 'gemini-1.5-flash,gemini-1.5-pro')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
+
+const MAX_RETRIES   = Number(process.env.GEMINI_MAX_RETRIES || 4);
+const BASE_DELAY_MS = Number(process.env.GEMINI_RETRY_BASE_MS || 400);
+
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+function isRetryable(err) {
+  const msg = String(err?.message || '').toLowerCase();
+  const st  = Number(err?.status || 0);
+  // capacity, rate-limit, transient/network-ish
+  return st === 503 || st === 429 || msg.includes('overloaded') || msg.includes('network') || msg.includes('fetch');
+}
 
 /* ---------- GIF / IMAGE proxy (Giphy) ---------- */
 const GIF_CACHE = new Map();
@@ -69,7 +87,7 @@ router.get('/gif', async (req, res) => {
   }
 });
 
-/* ---------- PLAN: single-week, N days ---------- */
+/* ---------- PLAN prompt: single-week, N days ---------- */
 const systemPlan = `
 You are a workout program generator. Return STRICT JSON only for a SINGLE WEEK:
 
@@ -99,7 +117,171 @@ Rules:
 - No extra text; STRICT JSON only.
 `;
 
-// shared worker (used by POST and GET)
+/* =========================
+   Helpers (authed + guest)
+   ========================= */
+function coerceSpecFromBodyOrDefaults(body = {}) {
+  const clamp = (n, lo, hi, def) => {
+    const v = Number(n);
+    if (Number.isFinite(v)) return Math.max(lo, Math.min(hi, v));
+    return def;
+  };
+
+  const days = clamp(body.daysPerWeek, 1, 7, 1);
+  const duration = clamp(body.durationMin, 5, 60, 15);
+
+  const eq = Array.isArray(body.equipment)
+    ? body.equipment
+    : String(body.equipment || '')
+        .split(',')
+        .map(x => x.trim())
+        .filter(Boolean);
+
+  return {
+    userName: (body.name || 'friend').toString().trim() || 'friend',
+    weeks: 1,
+    daysPerWeek: days,
+    age: body.age ? Number(body.age) : undefined,
+    goal: (body.goal || 'general fitness').toString(),
+    level: (body.level || 'beginner').toString(),
+    constraints: (body.constraints || 'none').toString(),
+    durationMin: duration,
+    equipment: eq.length ? eq : ['bodyweight']
+  };
+}
+
+/* Inject media links so every workout has a YouTube/GIF destination */
+function addMediaLinks(plan) {
+  if (!plan || !Array.isArray(plan.plan)) return plan;
+  for (const day of plan.plan) {
+    if (!Array.isArray(day.workout)) continue;
+    for (const w of day.workout) {
+      const q = String(w?.exercise || '').trim();
+      if (!q) continue;
+      if (!w.videoUrl) {
+        w.videoUrl = 'https://www.youtube.com/results?search_query=' +
+          encodeURIComponent(q + ' proper form');
+      }
+      if (!w.gifSearch) {
+        w.gifSearch = 'https://giphy.com/search/' + encodeURIComponent(q);
+      }
+    }
+  }
+  return plan;
+}
+
+/* Fallback offline plan so UX never blocks */
+function offlinePlan(spec) {
+  const { daysPerWeek = 1, durationMin = 10, goal = 'general fitness' } = spec || {};
+  const pools = {
+    general:   ['Bodyweight Squats', 'Push-ups (on knees or full)', 'Plank', 'Glute Bridges', 'Reverse Lunges', 'Superman Hold'],
+    core:      ['Crunches', 'Dead Bug', 'Russian Twists', 'Plank', 'Side Plank', 'Leg Raises'],
+    mobility:  ['Cat-Cow', 'World’s Greatest Stretch', 'Thoracic Rotations', 'Hip Flexor Stretch', 'Hamstring Stretch', 'Child’s Pose'],
+    endurance: ['Jumping Jacks', 'High Knees', 'Mountain Climbers', 'Skater Hops', 'Butt Kicks', 'Burpees (modified)'],
+    strength:  ['Bodyweight Squats', 'Split Squats', 'Push-ups', 'Glute Bridges', 'Inverted Rows (table)', 'Hip Hinge'],
+  };
+  const bucket =
+    /core/.test(goal) ? pools.core :
+    /mobility|flex/.test(goal) ? pools.mobility :
+    /endurance|cardio/.test(goal) ? pools.endurance :
+    /muscle|strength/.test(goal) ? pools.strength : pools.general;
+
+  const pick3 = (arr) => arr.slice(0, 3);
+  const days = [];
+  for (let d = 1; d <= daysPerWeek; d++) {
+    const workout = pick3(bucket).map((name, i) => ({
+      exercise: name,
+      sets: 2,
+      reps: (name.toLowerCase().includes('plank') || name.toLowerCase().includes('hold')) ? '20–40s hold' : (i === 0 ? '10–15' : '8–12'),
+      rir: 1,
+    }));
+    days.push({
+      day: `Day ${d} - ${String(goal).replace(/_/g,' ').replace(/\b\w/g,s=>s.toUpperCase())}`,
+      durationMin,
+      warmup: '1 min: Cat-Cow (30s), Arm Circles (30s)',
+      workout,
+      cooldown: '1 min: Quad Stretch (30s/side), Hamstring Stretch (30s)'
+    });
+  }
+  return {
+    weeks: 1,
+    daysPerWeek,
+    plan: days,
+    progression: 'Add 1 rep each session; when easy, add a 3rd set.',
+    medicalNote: 'Stop anything painful; keep movements controlled.',
+    meta: { source: 'fallback', model: null }
+  };
+}
+
+/* Resilient Gemini caller with retries + model fallback */
+async function callGemini(spec) {
+  if (!process.env.GEMINI_API_KEY) {
+    // No key provided – return offline plan (keeps UX working)
+    return addMediaLinks(offlinePlan(spec));
+  }
+
+  const { GoogleGenerativeAI } = await import('@google/generative-ai');
+  const modelsToTry = [DEFAULT_MODEL, ...FALLBACK_MODELS];
+
+  let lastErr = null;
+
+  for (const modelName of modelsToTry) {
+    try {
+      const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+      const model = genAI.getGenerativeModel({
+        model: modelName,
+        systemInstruction: systemPlan
+      });
+
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          const result = await model.generateContent(JSON.stringify(spec));
+          const raw =
+            (result && result.response && typeof result.response.text === 'function')
+              ? result.response.text()
+              : '{}';
+
+          let plan;
+          try { plan = JSON.parse(raw); }
+          catch {
+            const i = raw.indexOf('{');
+            const j = raw.lastIndexOf('}');
+            plan = JSON.parse(raw.slice(i, j + 1));
+          }
+
+          // normalize
+          plan = plan || {};
+          plan.weeks = 1;
+          plan.daysPerWeek = spec.daysPerWeek;
+          if (!Array.isArray(plan.plan)) plan.plan = [];
+          if (plan.plan.length > spec.daysPerWeek) plan.plan = plan.plan.slice(0, spec.daysPerWeek);
+          plan.meta = { source: 'gemini', model: modelName, retries: attempt - 1 };
+
+          return addMediaLinks(plan);
+        } catch (err) {
+          lastErr = err;
+          if (isRetryable(err) && attempt < MAX_RETRIES) {
+            const delay = BASE_DELAY_MS * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 250);
+            await sleep(delay);
+            continue; // retry same model
+          }
+          break; // non-retryable for this model → try next model
+        }
+      }
+    } catch (errOuter) {
+      lastErr = errOuter;
+      // try next model
+      continue;
+    }
+  }
+
+  console.error('Gemini failed across models; using offline plan:', lastErr);
+  return addMediaLinks(offlinePlan(spec));
+}
+
+/* =========================
+   AUTHEd path (DB Session)
+   ========================= */
 async function generateAndSavePlan(req) {
   const uid = req.user && req.user._id ? req.user._id : null;
   if (!uid) {
@@ -108,11 +290,10 @@ async function generateAndSavePlan(req) {
     throw e;
   }
 
-  // find/create latest session
   let s = await Session.findOne({ user: uid }).sort({ createdAt: -1 });
   if (!s) s = await Session.create({ user: uid });
 
-  // merge incoming body (POST only)
+  // consider any posted overrides
   if (req.method === 'POST' && req.body && typeof req.body === 'object') {
     const patch = {};
     for (const k of ['name','age','goal','level','constraints','daysPerWeek','durationMin']) {
@@ -133,58 +314,19 @@ async function generateAndSavePlan(req) {
   s.state = 'PLANNING';
   await s.save();
 
-  const safeUser = (req.user && typeof req.user === 'object') ? req.user : {};
   const safeName =
     (typeof s.name === 'string' && s.name.trim()) ? s.name.trim() :
-    (typeof safeUser.name === 'string' && safeUser.name.trim()) ? safeUser.name.trim() :
-    'friend';
+    (req.user?.name && String(req.user.name).trim()) || 'friend';
 
-  const targetDays =
-    (typeof s.daysPerWeek === 'number' && s.daysPerWeek >= 1 && s.daysPerWeek <= 7)
-      ? s.daysPerWeek : 1;
+  const spec = coerceSpecFromBodyOrDefaults({
+    ...s.toObject(),
+    name: safeName
+  });
 
-  const spec = {
-    userName: safeName,
-    weeks: 1,
-    daysPerWeek: targetDays,
-    age: (typeof s.age === 'number') ? s.age : undefined,
-    goal: (s.goal && String(s.goal).trim()) || 'general fitness',
-    level: (s.level && String(s.level).trim()) || 'beginner',
-    constraints: (s.constraints && String(s.constraints).trim()) || 'none',
-    durationMin: (typeof s.durationMin === 'number') ? s.durationMin : 15,
-    equipment: (Array.isArray(s.equipment) && s.equipment.length) ? s.equipment : ['bodyweight'],
-  };
+  let plan = await callGemini(spec);
 
-  if (!process.env.GEMINI_API_KEY) {
-    const e = new Error('Missing GEMINI_API_KEY');
-    e.status = 500;
-    throw e;
-  }
-
-  const { GoogleGenerativeAI } = await import('@google/generative-ai');
-  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  const model = genAI.getGenerativeModel({ model: MODEL, systemInstruction: systemPlan });
-
-  const result = await model.generateContent(JSON.stringify(spec));
-  const raw = (result && result.response && typeof result.response.text === 'function')
-    ? result.response.text()
-    : '{}';
-
-  let plan;
-  try {
-    plan = JSON.parse(raw);
-  } catch {
-    const i = raw.indexOf('{');
-    const j = raw.lastIndexOf('}');
-    plan = JSON.parse(raw.slice(i, j + 1));
-  }
-
-  // normalize to 1 week + exactly N days (truncate if too many)
-  plan = plan || {};
-  plan.weeks = 1;
-  plan.daysPerWeek = targetDays;
-  if (!Array.isArray(plan.plan)) plan.plan = [];
-  if (plan.plan.length > targetDays) plan.plan = plan.plan.slice(0, targetDays);
+  // belt & suspenders: ensure media links are present
+  plan = addMediaLinks(plan);
 
   s.plan = plan;
   s.state = 'PLAN_READY';
@@ -193,17 +335,59 @@ async function generateAndSavePlan(req) {
   return { plan, uid };
 }
 
-// POST /ai/plan
+/* =========================
+   Guest path (1 attempt)
+   ========================= */
+async function generateGuestPlan(req) {
+  req.session.guestAttempts = Number(req.session.guestAttempts || 0);
+  if (req.session.guestAttempts >= 1) {
+    const e = new Error('login_required');
+    e.status = 429;
+    throw e;
+  }
+
+  // merge prior guest inputs collected across wizard
+  const body = { ...(req.session.guestSpec || {}), ...(req.body || {}) };
+  const spec = coerceSpecFromBodyOrDefaults(body);
+
+  req.session.guestState = 'PLANNING';
+
+  let plan = await callGemini(spec);
+
+  // normalize/truncate already done in callGemini; just ensure media links
+  plan = addMediaLinks(plan);
+
+  req.session.guestPlan = plan;
+  req.session.guestState = 'PLAN_READY';
+  req.session.guestAttempts += 1;
+
+  return plan;
+}
+
+/* =========================
+   Routes
+   ========================= */
+
+// POST /ai/plan  (authed OR guest)
 router.post('/plan', async (req, res) => {
-  let uid;
+  let uid = null;
   try {
-    const out = await generateAndSavePlan(req);
-    uid = out.uid;
+    let out;
+    if (req.isAuthenticated && req.isAuthenticated()) {
+      out = await generateAndSavePlan(req);
+      uid = out.uid;
+    } else {
+      const plan = await generateGuestPlan(req);
+      out = { plan };
+    }
+
     const wantsJSON = req.headers.accept?.includes('application/json') || req.xhr;
     if (wantsJSON) return res.json({ ok: true, plan: out.plan });
     return res.redirect('/wizard/output');
   } catch (err) {
     console.error('AI plan error (POST):', err);
+
+    // mark DB session errored if authed
     try {
       uid = uid || (req.user && req.user._id);
       if (uid) {
@@ -211,30 +395,36 @@ router.post('/plan', async (req, res) => {
         if (s) { s.state = 'ERROR'; await s.save(); }
       }
     } catch {}
+
     if (req.headers.accept?.includes('application/json') || req.xhr) {
-      return res.status(err.status || 500).json({ ok: false, error: 'Could not generate plan. Try again.' });
+      const status = err.status || 500;
+      return res.status(status).json({
+        ok: false,
+        error: err.message === 'login_required' ? 'login_required' : 'Could not generate plan. Try again.'
+      });
     }
     return res.redirect('/wizard/fitnessgoal?msg=plan_error');
   }
 });
 
-// GET /ai/plan  (convenience)
+// GET /ai/plan  (convenience; authed OR guest)
 router.get('/plan', async (req, res) => {
-  let uid;
   try {
-    const out = await generateAndSavePlan(req);
-    uid = out.uid;
+    if (req.isAuthenticated && req.isAuthenticated()) {
+      await generateAndSavePlan(req);
+    } else {
+      await generateGuestPlan(req);
+    }
     return res.redirect('/wizard/output');
   } catch (err) {
     console.error('AI plan error (GET):', err);
-    try {
-      uid = uid || (req.user && req.user._id);
-      if (uid) {
-        const s = await Session.findOne({ user: uid }).sort({ createdAt: -1 });
-        if (s) { s.state = 'ERROR'; await s.save(); }
-      }
-    } catch {}
-    return res.redirect('/wizard/fitnessgoal?msg=plan_error');
+
+    // If guest exceeded the free attempt, send them back to the plan they already have with a clear message.
+    if (err && err.message === 'login_required') {
+      return res.redirect('/wizard/output?msg=login_required');
+    }
+
+    return res.redirect('/wizard/fitnessgoal?msg=' + encodeURIComponent(err.message || 'plan_error'));
   }
 });
 

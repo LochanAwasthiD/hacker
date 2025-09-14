@@ -1,4 +1,5 @@
 <% layout('layouts/boilerplate') %>
+<% const authed = !!currentUser; const guestLeft = (typeof guestRemaining !== 'undefined' ? Number(guestRemaining) : 1); %>
 
 <!-- Hero (full-bleed gradient, responsive two-column) -->
 <section class="hero-section gradient-bg text-white">
@@ -20,12 +21,23 @@
           Personalized micro-workouts tailored to your fitness level, schedule, and goals. No equipment needed!
         </p>
         <div class="d-flex flex-wrap gap-3">
-          <a href="#auth-section" class="btn btn-accent btn-lg rounded-pill px-4">Start Now</a>
+          <!-- Start CTA: allow if authed OR guest still has a free plan -->
+          <% if (authed || guestLeft > 0) { %>
+            <a href="/wizard/name-age" class="btn btn-accent btn-lg rounded-pill px-4">Start Now</a>
+          <% } else { %>
+            <a href="/#auth-section" class="btn btn-accent btn-lg rounded-pill px-4">Log in to continue</a>
+          <% } %>
           <a href="#how-it-works" class="btn btn-outline-light btn-lg rounded-pill px-4">Learn More</a>
         </div>
+
+        <% if (!authed && guestLeft === 0) { %>
+          <div class="mt-3 small text-warning opacity-90">
+            You’ve used your free plan — log in for unlimited plans and adjustments.
+          </div>
+        <% } %>
       </div>
 
-      <!-- Right: auth card -->
+      <!-- Right: auth card (kept exactly as you had it; no partials) -->
       <div class="col-12 col-lg-6" data-aos="fade-left" id="auth-section">
         <div class="auth-card bg-white text-dark overflow-hidden shadow-sm rounded-4">
           <div class="row g-0">
@@ -72,24 +84,24 @@
 
                       <div class="d-flex justify-content-between align-items-center mb-4">
                         <div class="form-check">
-                          <input class="form-check-input" type="checkbox" id="rememberMe" />
+                          <input class="form-check-input" type="checkbox" id="rememberMe" name="remember" />
                           <label class="form-check-label" for="rememberMe">Remember me</label>
                         </div>
-                        <a href="#" class="text-decoration-none">Forgot password?</a>
+                        <a href="/auth/forgot" class="text-decoration-none">Forgot password?</a>
                       </div>
 
                       <button type="submit" class="btn btn-primary w-100 mb-3">Login</button>
 
                       <div class="divider">or continue with</div>
                       <div class="d-flex gap-3">
-                        <button type="button" class="btn btn-outline-secondary flex-grow-1">
+                        <a href="/auth/github" class="btn btn-outline-secondary flex-grow-1">
                           <i data-feather="github" class="me-2"></i> GitHub
-                        </button>
-                        <button type="button" class="btn btn-outline-secondary flex-grow-1">
+                        </a>
+                        <a href="/auth/google" class="btn btn-outline-secondary flex-grow-1">
                           <i data-feather="google" class="me-2"></i> Google
-                        </button>
+                        </a>
                       </div>
-                    </form> <!-- ✅ closing form was missing -->
+                    </form>
                   </div>
 
                   <!-- Sign up -->
@@ -115,8 +127,8 @@
                       <div class="form-check mb-4">
                         <input class="form-check-input" type="checkbox" id="termsAgreement" required />
                         <label class="form-check-label" for="termsAgreement">
-                          I agree to the <a href="#" class="text-decoration-none">Terms of Service</a> and
-                          <a href="#" class="text-decoration-none">Privacy Policy</a>
+                          I agree to the <a href="/legal/terms" class="text-decoration-none">Terms of Service</a> and
+                          <a href="/legal/privacy" class="text-decoration-none">Privacy Policy</a>
                         </label>
                       </div>
 
@@ -124,12 +136,12 @@
 
                       <div class="divider">or sign up with</div>
                       <div class="d-flex gap-3">
-                        <button type="button" class="btn btn-outline-secondary flex-grow-1">
+                        <a href="/auth/github" class="btn btn-outline-secondary flex-grow-1">
                           <i data-feather="github" class="me-2"></i> GitHub
-                        </button>
-                        <button type="button" class="btn btn-outline-secondary flex-grow-1">
+                        </a>
+                        <a href="/auth/google" class="btn btn-outline-secondary flex-grow-1">
                           <i data-feather="google" class="me-2"></i> Google
-                        </button>
+                        </a>
                       </div>
                     </form>
                   </div>
@@ -143,120 +155,141 @@
   </div>
 </section>
 
-<!-- Features -->
-<section id="features" class="py-5 py-lg-7 bg-white">
-  <div class="container">
-    <div class="text-center mb-5" data-aos="fade-up">
-      <h2 class="fw-bold mb-3" style="color:#007bff">Why Choose Micro-Workout?</h2>
-      <p class="text-muted mx-auto" style="max-width:600px">Our science-backed approach helps you stay consistent with fitness, even with a busy schedule.</p>
+<% /* Show these sections only for guests (hide when logged in) */ %>
+<% if (!authed) { %>
+  <!-- Features -->
+  <section id="features" class="py-5 py-lg-7 bg-white">
+    <div class="container">
+      <div class="text-center mb-5" data-aos="fade-up">
+        <h2 class="fw-bold mb-3" style="color:#007bff">Why Choose Micro-Workout?</h2>
+        <p class="text-muted mx-auto" style="max-width:600px">Our science-backed approach helps you stay consistent with fitness, even with a busy schedule.</p>
+      </div>
+      <div class="row g-4">
+        <div class="col-md-4" data-aos="fade-up" data-aos-delay="100">
+          <div class="text-center p-4 h-100">
+            <div class="feature-icon mx-auto"><i data-feather="zap" width="24" height="24"></i></div>
+            <h5 class="fw-bold mb-3" style="color:#007bff">Quick & Effective</h5>
+            <p class="text-muted">5–15 minute workouts designed to maximize results in minimal time.</p>
+          </div>
+        </div>
+        <div class="col-md-4" data-aos="fade-up" data-aos-delay="200">
+          <div class="text-center p-4 h-100">
+            <div class="feature-icon mx-auto"><i data-feather="user" width="24" height="24"></i></div>
+            <h5 class="fw-bold mb-3" style="color:#007bff">Personalized Plans</h5>
+            <p class="text-muted">Customized for your level, age, health considerations, and equipment.</p>
+          </div>
+        </div>
+        <div class="col-md-4" data-aos="fade-up" data-aos-delay="300">
+          <div class="text-center p-4 h-100">
+            <div class="feature-icon mx-auto"><i data-feather="trending-up" width="24" height="24"></i></div>
+            <h5 class="fw-bold mb-3" style="color:#007bff">Progress Tracking</h5>
+            <p class="text-muted">Monitor improvements and stay motivated with our intuitive dashboard.</p>
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="row g-4">
-      <div class="col-md-4" data-aos="fade-up" data-aos-delay="100">
-        <div class="text-center p-4 h-100">
-          <div class="feature-icon mx-auto"><i data-feather="zap" width="24" height="24"></i></div>
-          <h5 class="fw-bold mb-3" style="color:#007bff">Quick & Effective</h5>
-          <p class="text-muted">5–15 minute workouts designed to maximize results in minimal time.</p>
-        </div>
-      </div>
-      <div class="col-md-4" data-aos="fade-up" data-aos-delay="200">
-        <div class="text-center p-4 h-100">
-          <div class="feature-icon mx-auto"><i data-feather="user" width="24" height="24"></i></div>
-          <h5 class="fw-bold mb-3" style="color:#007bff">Personalized Plans</h5>
-          <p class="text-muted">Customized for your level, age, health considerations, and equipment.</p>
-        </div>
-      </div>
-      <div class="col-md-4" data-aos="fade-up" data-aos-delay="300">
-        <div class="text-center p-4 h-100">
-          <div class="feature-icon mx-auto"><i data-feather="trending-up" width="24" height="24"></i></div>
-          <h5 class="fw-bold mb-3" style="color:#007bff">Progress Tracking</h5>
-          <p class="text-muted">Monitor improvements and stay motivated with our intuitive dashboard.</p>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
+  </section>
 
-<!-- How It Works -->
-<section id="how-it-works" class="py-5 py-lg-7 bg-light">
-  <div class="container">
-    <div class="text-center mb-5" data-aos="fade-up">
-      <h2 class="fw-bold mb-3">How It Works</h2>
-      <p class="text-muted mx-auto" style="max-width:600px">Get your personalized micro-workout plan in just a few steps</p>
+  <!-- How It Works -->
+  <section id="how-it-works" class="py-5 py-lg-7 bg-light">
+    <div class="container">
+      <div class="text-center mb-5" data-aos="fade-up">
+        <h2 class="fw-bold mb-3">How It Works</h2>
+        <p class="text-muted mx-auto" style="max-width:600px">Get your personalized micro-workout plan in just a few steps</p>
+      </div>
+      <div class="row g-4">
+        <div class="col-lg-6" data-aos="fade-right">
+          <div class="card border-0 shadow-sm h-100">
+            <div class="card-body p-4 p-lg-5 d-flex">
+              <div class="me-4">
+                <div class="bg-primary bg-opacity-10 text-primary rounded-circle p-3 d-flex align-items-center justify-content-center" style="width:50px;height:50px;">
+                  <span class="fw-bold">1</span>
+                </div>
+              </div>
+              <div>
+                <h5 class="fw-bold mb-3" style="color:#007bff">Tell Us About Yourself</h5>
+                <p class="text-muted">Quick assessment about your level, goals, available time, and any health considerations.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-lg-6" data-aos="fade-left" data-aos-delay="100">
+          <div class="card border-0 shadow-sm h-100">
+            <div class="card-body p-4 p-lg-5 d-flex">
+              <div class="me-4">
+                <div class="bg-primary bg-opacity-10 text-primary rounded-circle p-3 d-flex align-items-center justify-content-center" style="width:50px;height:50px;">
+                  <span class="fw-bold">2</span>
+                </div>
+              </div>
+              <div>
+                <h5 class="fw-bold mb-3" style="color:#007bff">Get Your Custom Plan</h5>
+                <p class="text-muted">Our Gemini-powered engine crafts a micro-workout routine tailored to your needs.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-lg-6" data-aos="fade-right" data-aos-delay="200">
+          <div class="card border-0 shadow-sm h-100">
+            <div class="card-body p-4 p-lg-5 d-flex">
+              <div class="me-4">
+                <div class="bg-primary bg-opacity-10 text-primary rounded-circle p-3 d-flex align-items-center justify-content-center" style="width:50px;height:50px;">
+                  <span class="fw-bold">3</span>
+                </div>
+              </div>
+              <div>
+                <h5 class="fw-bold mb-3" style="color:#007bff">Work Out Anytime</h5>
+                <p class="text-muted">Follow daily micro-workouts with form tips—no gym required.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-lg-6" data-aos="fade-left" data-aos-delay="300">
+          <div class="card border-0 shadow-sm h-100">
+            <div class="card-body p-4 p-lg-5 d-flex">
+              <div class="me-4">
+                <div class="bg-primary bg-opacity-10 text-primary rounded-circle p-3 d-flex align-items-center justify-content-center" style="width:50px;height:50px;">
+                  <span class="fw-bold">4</span>
+                </div>
+              </div>
+              <div>
+                <h5 class="fw-bold mb-3" style="color:#007bff">Track & Improve</h5>
+                <p class="text-muted">Monitor progress and get recommendations for advancement.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="row g-4">
-      <div class="col-lg-6" data-aos="fade-right">
-        <div class="card border-0 shadow-sm h-100">
-          <div class="card-body p-4 p-lg-5 d-flex">
-            <div class="me-4">
-              <div class="bg-primary bg-opacity-10 text-primary rounded-circle p-3 d-flex align-items-center justify-content-center" style="width:50px;height:50px;">
-                <span class="fw-bold">1</span>
-              </div>
-            </div>
-            <div>
-              <h5 class="fw-bold mb-3" style="color:#007bff">Tell Us About Yourself</h5>
-              <p class="text-muted">Quick assessment about your level, goals, available time, and any health considerations.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="col-lg-6" data-aos="fade-left" data-aos-delay="100">
-        <div class="card border-0 shadow-sm h-100">
-          <div class="card-body p-4 p-lg-5 d-flex">
-            <div class="me-4">
-              <div class="bg-primary bg-opacity-10 text-primary rounded-circle p-3 d-flex align-items-center justify-content-center" style="width:50px;height:50px;">
-                <span class="fw-bold">2</span>
-              </div>
-            </div>
-            <div>
-              <h5 class="fw-bold mb-3" style="color:#007bff">Get Your Custom Plan</h5>
-              <p class="text-muted">Our Gemini-powered engine crafts a micro-workout routine tailored to your needs.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="col-lg-6" data-aos="fade-right" data-aos-delay="200">
-        <div class="card border-0 shadow-sm h-100">
-          <div class="card-body p-4 p-lg-5 d-flex">
-            <div class="me-4">
-              <div class="bg-primary bg-opacity-10 text-primary rounded-circle p-3 d-flex align-items-center justify-content-center" style="width:50px;height:50px;">
-                <span class="fw-bold">3</span>
-              </div>
-            </div>
-            <div>
-              <h5 class="fw-bold mb-3" style="color:#007bff">Work Out Anytime</h5>
-              <p class="text-muted">Follow daily micro-workouts with form tips—no gym required.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="col-lg-6" data-aos="fade-left" data-aos-delay="300">
-        <div class="card border-0 shadow-sm h-100">
-          <div class="card-body p-4 p-lg-5 d-flex">
-            <div class="me-4">
-              <div class="bg-primary bg-opacity-10 text-primary rounded-circle p-3 d-flex align-items-center justify-content-center" style="width:50px;height:50px;">
-                <span class="fw-bold">4</span>
-              </div>
-            </div>
-            <div>
-              <h5 class="fw-bold mb-3" style="color:#007bff">Track & Improve</h5>
-              <p class="text-muted">Monitor progress and get recommendations for advancement.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
+  </section>
 
-<!-- Testimonials -->
-<section id="testimonials" class="py-5 py-lg-7 bg-white">
-  <div class="container">
-    <div class="text-center mb-5" data-aos="fade-up">
-      <h2 class="fw-bold mb-3" style="color:#007bff">Success Stories</h2>
-      <p class="text-muted mx-auto" style="max-width:600px">Don’t just take our word for it—hear from our community</p>
+  <!-- Testimonials -->
+  <section id="testimonials" class="py-5 py-lg-7 bg-white">
+    <div class="container">
+      <div class="text-center mb-5" data-aos="fade-up">
+        <h2 class="fw-bold mb-3" style="color:#007bff">Success Stories</h2>
+        <p class="text-muted mx-auto" style="max-width:600px">Don’t just take our word for it—hear from our community</p>
+      </div>
+      <div class="row g-4">
+        <!-- Replace with your real cards when ready -->
+        <div class="col-md-4">
+          <div class="card h-100 shadow-sm"><div class="card-body">
+            <p class="mb-2">“Perfect for busy days. I finally stayed consistent.”</p>
+            <div class="small text-muted">— Alex</div>
+          </div></div>
+        </div>
+        <div class="col-md-4">
+          <div class="card h-100 shadow-sm"><div class="card-body">
+            <p class="mb-2">“Short, effective, and actually fun.”</p>
+            <div class="small text-muted">— Priya</div>
+          </div></div>
+        </div>
+        <div class="col-md-4">
+          <div class="card h-100 shadow-sm"><div class="card-body">
+            <p class="mb-2">“Lost 10 lbs just doing 10 mins a day.”</p>
+            <div class="small text-muted">— Marco</div>
+          </div></div>
+        </div>
+      </div>
     </div>
-    <div class="row g-4">
-      <!-- Your 3 cards here -->
-    </div>
-  </div>
-</section>
+  </section>
+<% } %>

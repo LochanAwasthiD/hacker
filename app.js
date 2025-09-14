@@ -35,6 +35,8 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(rateLimit({ windowMs: 60_000, max: 40 }));
 
+
+
 // ---- Sessions
 const mongoUrl = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/microworkout';
 app.use(session({
@@ -57,19 +59,63 @@ app.use((req, res, next) => {
   next();
 });
 
-// ---- Auth guard
+// Auth guard
 const ensureAuth = (req, res, next) => req.isAuthenticated() ? next() : res.redirect('/#auth-section');
 
-// ---- Routes
+
+// Shared locals for all views
+app.use((req, res, next) => {
+  res.locals.currentUser = req.user || null;
+  // guests: 1 total attempt; logged-in: unlimited
+  const guestAttempts = Number(req.session?.guestAttempts || 0);
+  res.locals.guestRemaining = req.user ? Infinity : Math.max(0, 1 - guestAttempts);
+  res.locals.q = req.query || {};
+  next();
+});
+
+// Locals (must be before routes)
+app.use((req, res, next) => {
+  res.locals.currentUser = req.user || null;
+  res.locals.q = req.query;
+  // how many free guest attempts remain (0 or 1)
+  res.locals.guestRemaining = Math.max(0, 1 - Number(req.session?.guestAttempts || 0));
+  next();
+
+});
+
+// Make currentUser, guestRemaining, and query available to all views
+app.use((req, res, next) => {
+  res.locals.currentUser = req.user || null;
+  // guests have 1 attempt total; users unlimited (Infinity is fine for display logic)
+  const guestAttempts = Number(req.session?.guestAttempts || 0);
+  res.locals.guestRemaining = req.user ? Infinity : Math.max(0, 1 - guestAttempts);
+  res.locals.q = req.query || {};
+  next();
+});
+
+//  Routes
+
 app.use('/auth', require('./routes/auth'));
-app.use('/wizard', ensureAuth, require('./routes/wizard'));
-app.use('/ai', ensureAuth, require('./routes/ai'));
+// app.use('/wizard', ensureAuth, require('./routes/wizard'));
+// app.use('/ai', ensureAuth, require('./routes/ai'));
+app.use('/wizard', require('./routes/wizard')); // guest-friendly wizard
+app.use('/ai', require('./routes/ai'));         // guest can call /ai/plan once
 app.use('/newsletter', require('./routes/newsletter')); // if you’re using newsletter
 
-// ---- Home
+app.get('/', (req, res) => {
+  const guestRemaining = Math.max(0, 1 - Number(req.session?.guestAttempts || 0));
+  res.render('microworkout/homepage', {
+    title: 'Micro-Workout',
+    currentUser: req.user,
+    guestRemaining,
+    query: req.query
+  });
+});
+
+// -Home
 app.get('/', (req, res) => res.render('microworkout/homepage', { title: 'MicroWorkout' }));
 
-// ---- Server
+// Server
 const port = process.env.PORT || 8080;
 app.listen(port, () => console.log(`Listening on http://localhost:${port}`));
 

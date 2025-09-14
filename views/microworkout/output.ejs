@@ -142,10 +142,21 @@
     </div>
   <% } %>
 
-  <div class="mt-4 d-flex gap-2">
-    <a class="btn btn-primary" href="/wizard/fitnessgoal">Make another plan</a>
-    <a class="btn btn-outline-secondary" href="/wizard/duration">Adjust duration/days</a>
-  </div>
+  <% /* ---------- Guest-aware CTA ---------- */ %>
+  <% const isGuest = !user; %>
+  <% if (isGuest) { %>
+    <div class="alert alert-info mt-4">
+      You’ve used your free plan. Log in for unlimited plans and adjustments.
+    </div>
+    <div class="mt-3 d-flex gap-2">
+      <a class="btn btn-primary" href="/#auth-section">Log in (required for more)</a>
+    </div>
+  <% } else { %>
+    <div class="mt-4 d-flex gap-2">
+      <a class="btn btn-primary" href="/wizard/fitnessgoal">Make another plan</a>
+      <a class="btn btn-outline-secondary" href="/wizard/duration">Adjust duration/days</a>
+    </div>
+  <% } %>
 </div>
 
 <script>
@@ -158,7 +169,6 @@
     const tryLoad = (img, url) => new Promise((resolve) => {
       const test = new Image();
       test.onload = () => {
-        // simple clarity gate
         if (test.naturalWidth >= 240 && test.naturalHeight >= 140) {
           img.src = url;
           img.classList.remove('mw-skel');
@@ -181,7 +191,6 @@
         const r = await fetch('/ai/gif?q=' + encodeURIComponent(q));
         const j = await r.json();
         if (j && j.ok) {
-          // prefer real gif if available; fall back to still image (both supported by enhanced /ai/gif)
           if (j.gif) loaded = await tryLoad(img, j.gif);
           if (!loaded && j.url) loaded = await tryLoad(img, j.url);
           if (!loaded && j.still) loaded = await tryLoad(img, j.still);
@@ -194,8 +203,7 @@
           img.src = 'https://i.ytimg.com/vi/' + ytid + '/hqdefault.jpg';
           img.classList.remove('mw-skel');
         } else {
-          // keep skeleton but avoid a full-black tile by setting a subtle bg image text
-          img.remove(); // fallback is the light skeleton background
+          img.remove();
         }
       }
     }

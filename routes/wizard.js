@@ -2,35 +2,44 @@
 const express = require('express');
 const User = require('../models/user');
 const Session = require('../models/Session');
+
 const router = express.Router();
 
-// Find or create a session row for this user
+/* ---------- helpers ---------- */
 async function getSessionFor(userId) {
   let s = await Session.findOne({ user: userId }).sort({ createdAt: -1 });
   if (!s) s = await Session.create({ user: userId });
   return s;
 }
 
+function saveGuestSpec(req, patch = {}) {
+  req.session.guestSpec = { ...(req.session.guestSpec || {}), ...patch };
+}
+
 /* ========== NAME + AGE ========== */
 router.get('/name-age', (req, res) => {
-  res.render('microworkout/nameandage', { title: 'Tell us about you', user: req.user });
+  res.render('microworkout/nameandage', {
+    title: 'Tell us about you',
+    user: req.user,
+  });
 });
 
 router.post('/name-age', async (req, res) => {
   try {
     const { name, age } = req.body;
 
-    // Save on User
-    await User.findByIdAndUpdate(req.user._id, {
-      name: (name || '').trim(),
-      age: Number(age) || undefined
-    });
-
-    // Save on Session
-    const s = await getSessionFor(req.user._id);
-    s.name = (name || '').trim();
-    s.age = Number(age) || undefined;
-    await s.save();
+    if (req.isAuthenticated && req.isAuthenticated()) {
+      await User.findByIdAndUpdate(req.user._id, {
+        name: (name || '').trim(),
+        age: Number(age) || undefined,
+      });
+      const s = await getSessionFor(req.user._id);
+      s.name = (name || '').trim();
+      s.age = Number(age) || undefined;
+      await s.save();
+    } else {
+      saveGuestSpec(req, { name: (name || '').trim(), age: Number(age) || undefined });
+    }
 
     res.redirect('/wizard/fitness-level');
   } catch (e) {
@@ -40,24 +49,25 @@ router.post('/name-age', async (req, res) => {
 });
 
 /* ========== LEVEL ========== */
-// Page
 router.get('/fitness-level', (req, res) => {
   res.render('microworkout/fitnesslevel', { title: 'Fitness Level', user: req.user });
 });
 
-// Save (supports both /fitness-level and your UI alias /fitness-goal)
 async function saveLevelAndNext(req, res) {
   try {
     const level = String(req.body.level || '').toLowerCase();
-    if (!['beginner','intermediate','advanced'].includes(level)) {
+    if (!['beginner', 'intermediate', 'advanced'].includes(level)) {
       return res.redirect('/wizard/fitness-level?msg=invalid_level');
     }
 
-    await User.findByIdAndUpdate(req.user._id, { level });
-
-    const s = await getSessionFor(req.user._id);
-    s.level = level;
-    await s.save();
+    if (req.isAuthenticated && req.isAuthenticated()) {
+      await User.findByIdAndUpdate(req.user._id, { level });
+      const s = await getSessionFor(req.user._id);
+      s.level = level;
+      await s.save();
+    } else {
+      saveGuestSpec(req, { level });
+    }
 
     res.redirect('/wizard/fitnessgoal');
   } catch (e) {
@@ -65,17 +75,14 @@ async function saveLevelAndNext(req, res) {
     res.redirect('/wizard/fitness-level?msg=Could+not+save');
   }
 }
-
-router.post('/fitness-level', saveLevelAndNext); // canonical
-router.post('/fitness-goal',  saveLevelAndNext); // your UI posts here
+router.post('/fitness-level', saveLevelAndNext);
+router.post('/fitness-goal', saveLevelAndNext);
 
 /* ========== GOAL ========== */
-// Page
 router.get('/fitnessgoal', (req, res) => {
   res.render('microworkout/fitnessgoal', { title: 'Fitness Goal', user: req.user });
 });
 
-// Save (supports both /fitnessgoal and your UI alias /health-goal)
 async function saveGoalAndNext(req, res) {
   try {
     const raw = String(req.body.goal || '').trim();
@@ -86,15 +93,18 @@ async function saveGoalAndNext(req, res) {
       'Muscle Gain/Strength': 'muscle_gain',
       'Endurance/Cardio': 'endurance',
       'Flexibility/Mobility': 'mobility',
-      'Core Strength/Stability': 'core'
+      'Core Strength/Stability': 'core',
     };
     const goal = map[raw] || raw;
 
-    await User.findByIdAndUpdate(req.user._id, { primaryGoal: goal });
-
-    const s = await getSessionFor(req.user._id);
-    s.goal = goal;
-    await s.save();
+    if (req.isAuthenticated && req.isAuthenticated()) {
+      await User.findByIdAndUpdate(req.user._id, { primaryGoal: goal });
+      const s = await getSessionFor(req.user._id);
+      s.goal = goal;
+      await s.save();
+    } else {
+      saveGuestSpec(req, { goal });
+    }
 
     res.redirect('/wizard/healthimplication');
   } catch (e) {
@@ -102,65 +112,65 @@ async function saveGoalAndNext(req, res) {
     res.redirect('/wizard/fitnessgoal?msg=Could+not+save');
   }
 }
-
-router.post('/fitnessgoal', saveGoalAndNext); // canonical
-router.post('/health-goal', saveGoalAndNext); // your UI posts here
+router.post('/fitnessgoal', saveGoalAndNext);
+router.post('/health-goal', saveGoalAndNext);
 
 /* ========== HEALTH (constraints) ========== */
-// Page
 router.get('/healthimplication', (req, res) => {
   res.render('microworkout/healthimplication', { title: 'Health Considerations', user: req.user });
 });
 
-// Save (supports /healthimplication and your UI alias /equipment-goal)
 async function saveConstraintsAndNext(req, res) {
   try {
     const constraints = String(req.body.constraints || '').trim();
-
-    const s = await getSessionFor(req.user._id);
-    s.constraints = constraints || undefined;
-    await s.save();
-
+    if (req.isAuthenticated && req.isAuthenticated()) {
+      const s = await getSessionFor(req.user._id);
+      s.constraints = constraints || undefined;
+      await s.save();
+    } else {
+      saveGuestSpec(req, { constraints: constraints || undefined });
+    }
     res.redirect('/wizard/equipment');
   } catch (e) {
     console.error('constraints error:', e);
     res.redirect('/wizard/healthimplication?msg=Could+not+save');
   }
 }
-
-router.post('/healthimplication', saveConstraintsAndNext); // canonical
-router.post('/equipment-goal',   saveConstraintsAndNext); // your UI posts here
+router.post('/healthimplication', saveConstraintsAndNext);
+router.post('/equipment-goal', saveConstraintsAndNext);
 
 /* ========== EQUIPMENT ========== */
-// Page
 router.get('/equipment', (req, res) => {
   res.render('microworkout/equipment', { title: 'Equipment', user: req.user });
 });
 
-// Save (supports /equipment and your UI alias /duration-goal)
 async function saveEquipmentAndNext(req, res) {
   try {
     const eq = Array.isArray(req.body.equipment)
       ? req.body.equipment
-      : String(req.body.equipment || '').split(',').map(x => x.trim()).filter(Boolean);
+      : String(req.body.equipment || '')
+          .split(',')
+          .map((x) => x.trim())
+          .filter(Boolean);
 
-    const s = await getSessionFor(req.user._id);
-    s.equipment = eq;
-    await s.save();
+    if (req.isAuthenticated && req.isAuthenticated()) {
+      const s = await getSessionFor(req.user._id);
+      s.equipment = eq;
+      await s.save();
+    } else {
+      saveGuestSpec(req, { equipment: eq });
+    }
 
-    // Your next page is called "output-goal" (this is the duration page)
-    res.redirect('/wizard/output-goal');
+    res.redirect('/wizard/output-goal'); // duration page
   } catch (e) {
     console.error('equipment error:', e);
     res.redirect('/wizard/equipment?msg=Could+not+save');
   }
 }
+router.post('/equipment', saveEquipmentAndNext);
+router.post('/duration-goal', saveEquipmentAndNext);
 
-router.post('/equipment',     saveEquipmentAndNext); // canonical
-router.post('/duration-goal', saveEquipmentAndNext); // your UI posts here
-
-/* ========== DURATION ========== */
-// Pages (both show the same duration UI)
+/* ========== DURATION (and days per week) ========== */
 router.get('/duration', (req, res) => {
   res.render('microworkout/duration', { title: 'Duration', user: req.user });
 });
@@ -168,48 +178,22 @@ router.get('/output-goal', (req, res) => {
   res.render('microworkout/duration', { title: 'Duration', user: req.user });
 });
 
-// Save duration, then generate plan with Gemini (handled by /ai/plan)
-async function saveDurationAndGenerate(req, res) {
-  try {
-    const durationMin = Math.max(5, Number(req.body.durationMin) || 15);
-
-    const s = await getSessionFor(req.user._id);
-    s.durationMin = durationMin;
-    if (!s.daysPerWeek) s.daysPerWeek = 3; // default
-    await s.save();
-
-    // /ai/plan will call Gemini and then redirect to /wizard/output
-    res.redirect('/ai/plan');
-  } catch (e) {
-    console.error('duration error:', e);
-    res.redirect('/wizard/duration?msg=Could+not+save');
-  }
-}
-
-/* ========== DURATION ========== */
-// Pages (both show the same duration UI)
-router.get('/duration', (req, res) => {
-  res.render('microworkout/duration', { title: 'Duration', user: req.user });
-});
-
-router.get('/output-goal', (req, res) => {
-  res.render('microworkout/duration', { title: 'Duration', user: req.user });
-});
-
-// Save duration + days, then generate plan
-// NOTE: validates “> 5 minutes” (so min 6) and “> 1 day” (so min 2).
+// Save duration + days, then /ai/plan will generate and redirect to /wizard/output
 router.post(['/output-goal', '/duration'], async (req, res) => {
   try {
-    const durationMin = Math.max(6, Math.min(60, Number(req.body.durationMin) || 15)); // >5 and ≤60
-    const daysPerWeek = Math.max(2, Math.min(7, Number(req.body.daysPerWeek) || 1));   // >1 and ≤7
+    const durationMin = Math.max(6, Math.min(60, Number(req.body.durationMin) || 15)); // >5
+    const days = Math.max(2, Math.min(7, Number(req.body.daysPerWeek) || 1)); // >1, ≤7
 
-    const s = await getSessionFor(req.user._id);
-    s.durationMin = durationMin;
-    s.daysPerWeek = daysPerWeek;
-    await s.save();
+    if (req.isAuthenticated && req.isAuthenticated()) {
+      const s = await getSessionFor(req.user._id);
+      s.durationMin = durationMin;
+      s.daysPerWeek = days;
+      await s.save();
+    } else {
+      saveGuestSpec(req, { durationMin, daysPerWeek: days });
+    }
 
-    // /ai/plan will generate using s.durationMin & s.daysPerWeek, then redirect to /wizard/output
-    res.redirect('/ai/plan');
+    res.redirect('/ai/plan'); // route decides authed vs guest
   } catch (e) {
     console.error('duration error:', e);
     res.redirect('/wizard/duration?msg=Could+not+save');
@@ -217,25 +201,45 @@ router.post(['/output-goal', '/duration'], async (req, res) => {
 });
 
 /* ========== OUTPUT ========== */
-// Show the plan saved on Session by /ai/plan
 router.get('/output', async (req, res) => {
   try {
-    const s = await Session.findOne({ user: req.user._id }).sort({ createdAt: -1 }).lean();
-    if (!s || !s.plan) return res.redirect('/wizard/fitnessgoal?msg=no_plan');
-    res.render('microworkout/output', { title: 'Your Plan', plan: s.plan, s, user: req.user });
+    let plan = null;
+    let s = null;
+
+    if (req.isAuthenticated && req.isAuthenticated()) {
+      s = await Session.findOne({ user: req.user._id }).sort({ createdAt: -1 }).lean();
+      plan = s?.plan || null;
+    } else {
+      plan = req.session.guestPlan || null;
+    }
+
+    if (!plan) return res.redirect('/wizard/fitnessgoal?msg=no_plan');
+
+    // guestRemaining: 1 free total; show in UI
+    const attempts = Number(req.session.guestAttempts || 0);
+    const guestRemaining = (req.isAuthenticated && req.isAuthenticated()) ? 0 : Math.max(0, 1 - attempts);
+
+    res.render('microworkout/output', {
+      title: 'Your Plan',
+      plan,
+      s,
+      user: req.user,
+      guestRemaining,
+    });
   } catch (e) {
     console.error('output render error:', e);
     res.redirect('/wizard/fitnessgoal?msg=render_error');
   }
 });
 
-// GET /wizard/status  (polled by generating.ejs)
+/* ========== STATUS (optional) ========== */
 router.get('/status', async (req, res) => {
   try {
-    const s = await Session.findOne({ user: req.user._id })
-      .sort({ createdAt: -1 })
-      .lean();
-    return res.json({ ok: true, state: s?.state || 'INTAKE' });
+    if (req.isAuthenticated && req.isAuthenticated()) {
+      const s = await Session.findOne({ user: req.user._id }).sort({ createdAt: -1 }).lean();
+      return res.json({ ok: true, state: s?.state || 'INTAKE' });
+    }
+    return res.json({ ok: true, state: req.session.guestState || 'INTAKE' });
   } catch (e) {
     console.error('wizard/status error:', e);
     return res.status(500).json({ ok: false, error: 'status_failed' });
