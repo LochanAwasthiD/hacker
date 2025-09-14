@@ -186,8 +186,35 @@ async function saveDurationAndGenerate(req, res) {
   }
 }
 
-router.post('/duration',    saveDurationAndGenerate); // canonical
-router.post('/output-goal', saveDurationAndGenerate); // your UI posts here
+/* ========== DURATION ========== */
+// Pages (both show the same duration UI)
+router.get('/duration', (req, res) => {
+  res.render('microworkout/duration', { title: 'Duration', user: req.user });
+});
+
+router.get('/output-goal', (req, res) => {
+  res.render('microworkout/duration', { title: 'Duration', user: req.user });
+});
+
+// Save duration + days, then generate plan
+// NOTE: validates “> 5 minutes” (so min 6) and “> 1 day” (so min 2).
+router.post(['/output-goal', '/duration'], async (req, res) => {
+  try {
+    const durationMin = Math.max(6, Math.min(60, Number(req.body.durationMin) || 15)); // >5 and ≤60
+    const daysPerWeek = Math.max(2, Math.min(7, Number(req.body.daysPerWeek) || 1));   // >1 and ≤7
+
+    const s = await getSessionFor(req.user._id);
+    s.durationMin = durationMin;
+    s.daysPerWeek = daysPerWeek;
+    await s.save();
+
+    // /ai/plan will generate using s.durationMin & s.daysPerWeek, then redirect to /wizard/output
+    res.redirect('/ai/plan');
+  } catch (e) {
+    console.error('duration error:', e);
+    res.redirect('/wizard/duration?msg=Could+not+save');
+  }
+});
 
 /* ========== OUTPUT ========== */
 // Show the plan saved on Session by /ai/plan

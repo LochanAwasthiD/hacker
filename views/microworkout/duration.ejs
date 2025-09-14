@@ -2,15 +2,41 @@
 <div class="container">
   <div class="row justify-content-center">
     <div class="col-lg-7 mt-5 mb-5">
-      <form class="info-card" method="POST" action="/wizard/output-goal" data-aos="fade-up">
+      <form class="info-card" method="POST" action="/wizard/output-goal" data-aos="fade-up" id="mwDurForm">
         <h3 class="fw-bold text-center mb-4" style="color: var(--primary-color);">
           What is your desired workout duration?
         </h3>
         <p class="text-muted text-center mb-4">Most sessions are 5 to 20 minutes. You can change this later.</p>
-        <div class="input-group mb-4">
-          <input type="number" class="form-control form-control-lg text-center" name="durationMin" min="5" max="60" placeholder="e.g., 15" required>
+
+        <!-- Duration -->
+        <div class="input-group mb-3">
+          <input
+            type="number"
+            class="form-control form-control-lg text-center"
+            name="durationMin"
+            min="6" max="60"   
+            placeholder="e.g., 15"
+            required
+          >
           <span class="input-group-text bg-light fw-bold" style="font-size:1.25rem; border-radius:12px; border-top-left-radius:0; border-bottom-left-radius:0;">minutes</span>
         </div>
+
+        <!-- Days per week -->
+        <label class="form-label text-muted">How many days per week?</label>
+        <div class="input-group mb-4">
+          <input
+            type="number"
+            class="form-control form-control-lg text-center"
+            name="daysPerWeek"
+            min="1" max="7" 
+            placeholder="e.g., 3"
+            required
+          >
+          <span class="input-group-text bg-light fw-bold" style="font-size:1.25rem; border-radius:12px; border-top-left-radius:0; border-bottom-left-radius:0;">days</span>
+        </div>
+
+        <div id="mwDurErr" class="alert alert-danger d-none mb-3"></div>
+
         <div class="d-grid gap-2">
           <button class="btn btn-primary btn-lg" type="submit">Generate My Workout</button>
         </div>
@@ -18,3 +44,34 @@
     </div>
   </div>
 </div>
+
+
+
+<script>
+(() => {
+  const form = document.getElementById('mwDurForm');
+  const dur  = form.querySelector('input[name="durationMin"]');
+  const days = form.querySelector('input[name="daysPerWeek"]');
+  const err  = document.getElementById('mwDurErr');
+
+  form.addEventListener('submit', (e) => {
+    const d  = Number(dur.value);
+    const dy = Number(days.value);
+    const problems = [];
+
+    // Required rules
+    if (!(d > 5))  problems.push('Duration must be more than 5 minutes.');
+    if (!(dy > 1)) problems.push('Days per week must be more than 1 (minimum 2).');
+    if (dy > 7)    problems.push('Days per week cannot exceed 7.');
+
+    if (problems.length) {
+      e.preventDefault();
+      err.classList.remove('d-none');
+      err.innerHTML = problems.join('<br>');
+      (d <= 5 ? dur : days).focus();
+    } else {
+      err.classList.add('d-none');
+    }
+  });
+})();
+</script>

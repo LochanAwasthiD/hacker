@@ -1,115 +1,137 @@
 <% layout('layouts/boilerplate') %>
 
 <style>
-  /* media fit + skeleton */
-  .mw-media { height: 190px; object-fit: cover; }
+  /* page */
+  .mw-day { border-radius: 16px; border: 1px solid rgba(17,24,39,.08); background:#fff; }
+  .mw-day + .mw-day { margin-top: 1rem; }
+  .mw-muted { color:#64748b; }
+
+  /* header */
+  .mw-dot { width:.6rem; height:.6rem; border-radius:50%; background:#22c55e; display:inline-block; margin-right:.5rem; }
+  .mw-badge { font-size:.75rem; padding:.25rem .6rem; border-radius:999px; background:#f1f5f9; color:#0f172a; border:1px solid #e2e8f0; }
+  .mw-badge.mw-warm { background:#ecfeff; color:#0369a1; border-color:#bae6fd }
+  .mw-badge.mw-cool { background:#eef2ff; color:#3730a3; border-color:#ddd6fe }
+  .mw-est { color:#2563eb; font-weight:700; }
+
+  /* card */
+  .mw-ex { border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; background:#fff; height:100%; box-shadow:0 1px 2px rgba(0,0,0,.04); }
+  .mw-media-wrap { position:relative; background:#f8fafc; }
+  .mw-media { width:100%; height: 180px; object-fit: cover; display:block; }
   .mw-skel {
-    background: linear-gradient(90deg,#0b0c10 25%,#1a1f2b 37%,#0b0c10 63%);
+    background: linear-gradient(90deg,#e5e7eb 25%,#f3f4f6 37%,#e5e7eb 63%);
     background-size: 400% 100%;
     animation: mwShimmer 1.3s infinite linear;
   }
   @keyframes mwShimmer { 0%{background-position:100% 0} 100%{background-position:-100% 0} }
-  /* alternating clipping feel */
-  .mw-left  { border-top-left-radius: 1rem !important;  border-bottom-left-radius: 1rem !important; }
-  .mw-right { border-top-right-radius: 1rem !important; border-bottom-right-radius: 1rem !important; }
+  .mw-flag {
+    position:absolute; top:.5rem; left:.5rem; font-size:.7rem;
+    padding:.2rem .45rem; border-radius:999px; background:#0f172a; color:#fff; opacity:.85;
+  }
+
+  .mw-kv { list-style:none; padding-left:0; margin:0; }
+  .mw-kv li { display:flex; gap:.5rem; align-items:center; color:#334155; }
+  .mw-kv li + li { margin-top:.25rem; }
+  .mw-k { font-weight:700; color:#2563eb; }
+
+  .mw-tip { font-size:.8rem; color:#64748b; border-top:1px dashed #e5e7eb; padding-top:.5rem; margin-top:.5rem; }
 </style>
 
-<div class="container my-5">
-  <h1 class="mb-1">Your <%= plan.weeks || 4 %>-Week Plan</h1>
-  <p class="text-muted">Days/Week: <strong><%= plan.daysPerWeek || s?.daysPerWeek || 3 %></strong></p>
+<div class="container my-4 my-md-5">
+  <h1 class="mb-1">Your <%= plan.weeks || 1 %>-Week Plan</h1>
+  <p class="mw-muted">Days/Week: <strong><%= plan.daysPerWeek || s?.daysPerWeek || 1 %></strong></p>
 
   <% if (plan.medicalNote) { %>
     <div class="alert alert-warning">⚠️ <%= plan.medicalNote %></div>
   <% } %>
 
   <% if (Array.isArray(plan.plan) && plan.plan.length) { %>
-    <div class="vstack gap-4">
-      <% plan.plan.forEach((d, i) => { %>
-        <div class="workout-section">
-          <div class="d-flex align-items-center justify-content-between flex-wrap mb-2">
-            <div>
-              <h4 class="mb-1"><%= d.day || ('Day ' + (i+1)) %></h4>
-              <p class="duration-text mb-0">~ <strong><%= d.durationMin || 0 %></strong> min</p>
-            </div>
-            <div class="d-flex gap-2">
-              <% if (d.warmup) { %><span class="badge bg-success">Warmup</span><% } %>
-              <% if (d.finisher) { %><span class="badge bg-info text-dark">Finisher</span><% } %>
-              <% if (d.cooldown) { %><span class="badge bg-secondary">Cooldown</span><% } %>
-            </div>
+    <% plan.plan.forEach((d, i) => { %>
+      <div class="mw-day p-3 p-md-4">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+          <div class="d-flex align-items-baseline gap-2">
+            <span class="mw-dot"></span>
+            <h4 class="mb-0"><%= d.day || ('Day ' + (i+1)) %></h4>
           </div>
+          <div class="d-flex align-items-center gap-2">
+            <% if (d.finisher) { %><span class="mw-badge">Finisher</span><% } %>
+            <% if (d.warmup)   { %><span class="mw-badge mw-warm">Warmup</span><% } %>
+            <% if (d.cooldown){ %><span class="mw-badge mw-cool">Cooldown</span><% } %>
+          </div>
+        </div>
 
+        <div class="mw-muted mb-3">
+          <span class="mw-est">~ <%= d.durationMin || 0 %> min</span>
           <% if (d.warmup) { %>
-            <p class="mb-3"><strong>Warmup:</strong> <%= d.warmup %></p>
+            <span class="ms-3"><strong>Warmup:</strong> <%= d.warmup %></span>
           <% } %>
+        </div>
 
-          <% if (Array.isArray(d.workout) && d.workout.length) { %>
-            <div class="row g-4">
-              <% d.workout.forEach((w, j) => { 
-                const clip = (j % 2 === 0) ? 'mw-left' : 'mw-right';
-              %>
-                <div class="col-12 col-md-6 col-lg-4">
-                  <div class="card h-100 shadow-sm">
-                    <% 
-                      let embedUrl = null;
-                      if (w?.videoUrl) {
-                        if (w.videoUrl.includes('/watch?v=')) {
-                          try { embedUrl = 'https://www.youtube.com/embed/' + w.videoUrl.split('v=')[1].split('&')[0]; } catch(e){}
-                        } else if (w.videoUrl.includes('youtu.be/')) {
-                          try { embedUrl = 'https://www.youtube.com/embed/' + w.videoUrl.split('youtu.be/')[1].split(/[?&]/)[0]; } catch(e){}
-                        }
-                      }
-                    %>
-
+        <% if (Array.isArray(d.workout) && d.workout.length) { %>
+          <div class="row g-4">
+            <% (d.workout || []).slice(0, 3).forEach((w) => { 
+                let ytId = null;
+                if (w?.videoUrl) {
+                  try {
+                    if (w.videoUrl.includes('/watch?v=')) {
+                      ytId = w.videoUrl.split('v=')[1].split('&')[0];
+                    } else if (w.videoUrl.includes('youtu.be/')) {
+                      ytId = w.videoUrl.split('youtu.be/')[1].split(/[?&]/)[0];
+                    }
+                  } catch(_) {}
+                }
+                const searchQ = (w?.exercise || '').trim();
+            %>
+              <div class="col-12 col-md-6 col-lg-4">
+                <div class="mw-ex card">
+                  <div class="mw-media-wrap">
+                    <span class="mw-flag">Preview</span>
                     <% if (w?.gifUrl) { %>
-                      <img class="card-img-top mw-media <%= clip %>" src="<%= w.gifUrl %>" alt="<%= w.exercise %> gif">
-                    <% } else if (w?.image) { %>
-                      <img class="card-img-top mw-media <%= clip %>" src="<%= w.image %>" alt="<%= w.exercise %>">
-                    <% } else if (embedUrl) { %>
-                      <div class="ratio ratio-16x9 <%= clip %>">
-                        <iframe
-                          src="<%= embedUrl %>"
-                          title="<%= w.exercise %> video"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                          allowfullscreen
-                          loading="lazy"
-                          style="border-radius: inherit;"
-                        ></iframe>
-                      </div>
+                      <img class="mw-media" src="<%= w.gifUrl %>" alt="<%= w.exercise %> gif">
                     <% } else { %>
-                      <!-- placeholder that will be replaced by a live GIF via /ai/gif if API key exists -->
-                      <img class="card-img-top mw-media mw-skel <%= clip %>" data-gif-query="<%= w.exercise %>" alt="Preview loading…">
+                      <img
+                        class="mw-media mw-skel"
+                        data-gif-query="<%= searchQ %>"
+                        <% if (ytId) { %> data-ytid="<%= ytId %>" <% } %>
+                        alt="Preview">
                     <% } %>
+                  </div>
 
-                    <div class="card-body d-flex flex-column">
-                      <h5 class="card-title mb-2"><%= w.exercise %></h5>
-                      <ul class="list-unstyled small text-muted mb-3">
-                        <% if (w.sets) { %><li><strong>Sets:</strong> <%= w.sets %></li><% } %>
-                        <% if (w.reps) { %><li><strong>Reps:</strong> <%= w.reps %></li><% } %>
-                        <% if (typeof w.rir !== 'undefined') { %><li><strong>RIR:</strong> <%= w.rir %></li><% } %>
-                      </ul>
+                  <div class="card-body d-flex flex-column">
+                    <h5 class="card-title mb-2"><%= w.exercise %></h5>
+                    <ul class="mw-kv small mb-2">
+                      <% if (w.sets) { %><li><span class="mw-k">Sets:</span> <%= w.sets %></li><% } %>
+                      <% if (w.reps) { %><li><span class="mw-k">Reps:</span> <%= w.reps %></li><% } %>
+                      <% if (typeof w.rir !== 'undefined') { %><li><span class="mw-k">RIR:</span> <%= w.rir %></li><% } %>
+                    </ul>
 
-                      <div class="mt-auto d-flex gap-2 flex-wrap">
-                        <a class="btn btn-sm btn-primary" target="_blank" rel="noopener"
-                           href="<%= w.videoUrl || ('https://www.youtube.com/results?search_query=' + encodeURIComponent((w.exercise||'') + ' proper form')) %>">
-                          Watch video
-                        </a>
-                        <a class="btn btn-sm btn-outline-secondary" target="_blank" rel="noopener"
-                           href="<%= w.gifSearch || ('https://giphy.com/search/' + encodeURIComponent(w.exercise||'')) %>">
-                          View GIFs
-                        </a>
-                      </div>
+                    <div class="mw-tip">
+                      Form tip: keep core engaged, neutral spine, controlled tempo.
+                      Stop if you feel pain; breathe steadily.
+                    </div>
+
+                    <div class="mt-auto d-flex flex-wrap gap-2 pt-2">
+                      <a class="btn btn-sm btn-primary" target="_blank" rel="noopener"
+                         href="<%= w.videoUrl || ('https://www.youtube.com/results?search_query=' + encodeURIComponent((w.exercise||'') + ' proper form')) %>">
+                        Watch video
+                      </a>
+                      <a class="btn btn-sm btn-outline-secondary" target="_blank" rel="noopener"
+                         href="<%= w.gifSearch || ('https://giphy.com/search/' + encodeURIComponent(w.exercise||'')) %>">
+                        View GIFs
+                      </a>
                     </div>
                   </div>
                 </div>
-              <% }) %>
-            </div>
-          <% } %>
+              </div>
+            <% }) %>
+          </div>
+        <% } %>
 
-          <% if (d.finisher) { %><p class="mt-3 mb-1"><strong>Finisher:</strong> <%= d.finisher %></p><% } %>
-          <% if (d.cooldown) { %><p class="mb-0"><strong>Cooldown:</strong> <%= d.cooldown %></p><% } %>
+        <div class="mw-muted mt-3">
+          <% if (d.finisher) { %><span class="me-3"><strong>Finisher:</strong> <%= d.finisher %></span><% } %>
+          <% if (d.cooldown) { %><span><strong>Cooldown:</strong> <%= d.cooldown %></span><% } %>
         </div>
-      <% }) %>
-    </div>
+      </div>
+    <% }) %>
   <% } else { %>
     <div class="alert alert-info">No plan details were returned. Try generating again.</div>
   <% } %>
@@ -122,7 +144,7 @@
 
   <div class="mt-4 d-flex gap-2">
     <a class="btn btn-primary" href="/wizard/fitnessgoal">Make another plan</a>
-    <a class="btn btn-outline-light" href="/wizard/duration">Adjust duration/days</a>
+    <a class="btn btn-outline-secondary" href="/wizard/duration">Adjust duration/days</a>
   </div>
 </div>
 
@@ -130,19 +152,52 @@
   document.addEventListener('DOMContentLoaded', async () => {
     if (window.feather && window.feather.replace) window.feather.replace();
 
-    // fill placeholders with a live GIF if /ai/gif is available
-    const placeholders = [...document.querySelectorAll('img[data-gif-query]')];
-    for (const img of placeholders) {
+    // Try to load a clear GIF first; if not, show a still or YT thumbnail.
+    const imgs = Array.from(document.querySelectorAll('img[data-gif-query]'));
+
+    const tryLoad = (img, url) => new Promise((resolve) => {
+      const test = new Image();
+      test.onload = () => {
+        // simple clarity gate
+        if (test.naturalWidth >= 240 && test.naturalHeight >= 140) {
+          img.src = url;
+          img.classList.remove('mw-skel');
+          resolve(true);
+        } else {
+          resolve(false);
+        }
+      };
+      test.onerror = () => resolve(false);
+      test.src = url;
+    });
+
+    for (const img of imgs) {
       const q = img.dataset.gifQuery || '';
       if (!q) continue;
+
+      let loaded = false;
+
       try {
         const r = await fetch('/ai/gif?q=' + encodeURIComponent(q));
         const j = await r.json();
-        if (j.ok && j.url) {
-          img.src = j.url;
-          img.classList.remove('mw-skel');
+        if (j && j.ok) {
+          // prefer real gif if available; fall back to still image (both supported by enhanced /ai/gif)
+          if (j.gif) loaded = await tryLoad(img, j.gif);
+          if (!loaded && j.url) loaded = await tryLoad(img, j.url);
+          if (!loaded && j.still) loaded = await tryLoad(img, j.still);
         }
-      } catch (_) { /* keep skeleton on failures */ }
+      } catch (_) {}
+
+      if (!loaded) {
+        const ytid = img.dataset.ytid;
+        if (ytid) {
+          img.src = 'https://i.ytimg.com/vi/' + ytid + '/hqdefault.jpg';
+          img.classList.remove('mw-skel');
+        } else {
+          // keep skeleton but avoid a full-black tile by setting a subtle bg image text
+          img.remove(); // fallback is the light skeleton background
+        }
+      }
     }
   });
 </script>

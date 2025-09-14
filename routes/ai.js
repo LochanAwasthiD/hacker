@@ -5,7 +5,7 @@ const router = express.Router();
 
 const MODEL = process.env.MODEL || 'gemini-2.5-flash';
 
-/* ---------- tiny GIF proxy (optional) ---------- */
+/* ---------- GIF / IMAGE proxy (Giphy) ---------- */
 const GIF_CACHE = new Map();
 const GIPHY_KEY = process.env.GIPHY_API_KEY || '';
 
@@ -15,7 +15,14 @@ router.get('/gif', async (req, res) => {
     if (!q) return res.json({ ok: false });
 
     const key = `g:${q.toLowerCase()}`;
-    if (GIF_CACHE.has(key)) return res.json({ ok: true, url: GIF_CACHE.get(key) });
+    if (GIF_CACHE.has(key)) {
+      const cached = GIF_CACHE.get(key);
+      return res.json({
+        ok: !!(cached.gif || cached.still),
+        ...cached,
+        url: cached.gif || cached.still
+      });
+    }
 
     if (!GIPHY_KEY) return res.json({ ok: false }); // feature off if no key
 
@@ -27,27 +34,54 @@ router.get('/gif', async (req, res) => {
 
     const r = await fetch(u);
     const j = await r.json();
-    const url = j?.data?.[0]?.images?.downsized_medium?.url || j?.data?.[0]?.images?.downsized?.url;
-    if (url) GIF_CACHE.set(key, url);
-    return res.json({ ok: !!url, url });
+    const images = j?.data?.[0]?.images || {};
+
+    // Prefer larger, clearer GIF
+    const gif =
+      images.downsized_medium?.url ||
+      images.downsized?.url ||
+      images.original?.url ||
+      images.preview_gif?.url ||
+      images.fixed_height?.url ||
+      null;
+
+    // Sharp still fallback
+    const still =
+      images.downsized_still?.url ||
+      images.original_still?.url ||
+      images.fixed_height_still?.url ||
+      null;
+
+    const payload = {
+      gif,
+      still,
+      gif_w: Number(images.downsized_medium?.width || images.downsized?.width || images.original?.width || 0),
+      gif_h: Number(images.downsized_medium?.height || images.downsized?.height || images.original?.height || 0),
+      still_w: Number(images.downsized_still?.width || images.original_still?.width || images.fixed_height_still?.width || 0),
+      still_h: Number(images.downsized_still?.height || images.original_still?.height || images.fixed_height_still?.height || 0),
+    };
+
+    GIF_CACHE.set(key, payload);
+    return res.json({ ok: !!(gif || still), ...payload, url: gif || still });
   } catch (e) {
     console.error('gif proxy error', e);
     return res.json({ ok: false });
   }
 });
 
-/* ---------- PLAN prompt ---------- */
+/* ---------- PLAN: single-week, N days ---------- */
 const systemPlan = `
-You are a workout program generator. Return STRICT JSON only:
+You are a workout program generator. Return STRICT JSON only for a SINGLE WEEK:
+
 {
-  "weeks": <number>,
+  "weeks": 1,
   "daysPerWeek": <number>,
   "plan": [
     {
       "day": "Day 1 - <focus>",
       "durationMin": <number>,
       "workout": [
-        {"exercise":"<name>","sets":<number>,"reps":"<range or number>","rir":<number>}
+        {"exercise":"<name>","sets":<number>,"reps":"<range or number>","rir":<number>,"videoUrl":"<optional>"}
       ],
       "finisher":"<optional>",
       "warmup":"<optional>",
@@ -57,41 +91,16 @@ You are a workout program generator. Return STRICT JSON only:
   "progression": "<1-2 lines>",
   "medicalNote": "<optional>"
 }
-No extra text. Tailor to goal/level/constraints/equipment/duration.
+
+Rules:
+- Always output ONLY one week (weeks=1).
+- Create EXACTLY 'daysPerWeek' days: Day 1 ... Day N.
+- Tailor to goal/level/constraints/equipment/duration.
+- No extra text; STRICT JSON only.
 `;
 
-/* ---------- Resiliency helpers (retry + fallbacks) ---------- */
-const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-
-async function callGeminiWithRetry({ apiKey, modelNames, systemInstruction, payload, tries = 5, baseDelay = 700 }) {
-  const { GoogleGenerativeAI } = await import('@google/generative-ai');
-  const genAI = new GoogleGenerativeAI(apiKey);
-
-  let lastErr;
-  for (const name of modelNames) {
-    const model = genAI.getGenerativeModel({ model: name, systemInstruction });
-    for (let attempt = 1; attempt <= tries; attempt++) {
-      try {
-        const res = await model.generateContent(JSON.stringify(payload));
-        const txt = typeof res?.response?.text === 'function' ? res.response.text() : '{}';
-        return { text: txt, usedModel: name };
-      } catch (e) {
-        lastErr = e;
-        const status = e?.status || e?.statusCode;
-        const transient = [429, 500, 502, 503, 504].includes(status);
-        if (!transient || attempt === tries) break;
-        const jitter = Math.floor(Math.random() * 250);
-        await sleep(baseDelay * Math.pow(2, attempt - 1) + jitter);
-      }
-    }
-    // try next fallback model
-  }
-  throw lastErr || new Error('Gemini call failed');
-}
-
-/* ---------- Shared worker (used by POST and GET) ---------- */
+// shared worker (used by POST and GET)
 async function generateAndSavePlan(req) {
-  // 0) Must be logged in (ensureAuth already guards this route, double-check anyway)
   const uid = req.user && req.user._id ? req.user._id : null;
   if (!uid) {
     const e = new Error('Not authenticated');
@@ -99,11 +108,11 @@ async function generateAndSavePlan(req) {
     throw e;
   }
 
-  // 1) Find/create latest session
+  // find/create latest session
   let s = await Session.findOne({ user: uid }).sort({ createdAt: -1 });
   if (!s) s = await Session.create({ user: uid });
 
-  // 2) Merge incoming body (POST only)
+  // merge incoming body (POST only)
   if (req.method === 'POST' && req.body && typeof req.body === 'object') {
     const patch = {};
     for (const k of ['name','age','goal','level','constraints','daysPerWeek','durationMin']) {
@@ -121,74 +130,68 @@ async function generateAndSavePlan(req) {
     if (Object.keys(patch).length) Object.assign(s, patch);
   }
 
-  // 3) Mark planning
   s.state = 'PLANNING';
   await s.save();
 
-  // 4) Build safe spec (NO direct req.user.name deref)
   const safeUser = (req.user && typeof req.user === 'object') ? req.user : {};
   const safeName =
     (typeof s.name === 'string' && s.name.trim()) ? s.name.trim() :
     (typeof safeUser.name === 'string' && safeUser.name.trim()) ? safeUser.name.trim() :
     'friend';
 
+  const targetDays =
+    (typeof s.daysPerWeek === 'number' && s.daysPerWeek >= 1 && s.daysPerWeek <= 7)
+      ? s.daysPerWeek : 1;
+
   const spec = {
     userName: safeName,
+    weeks: 1,
+    daysPerWeek: targetDays,
     age: (typeof s.age === 'number') ? s.age : undefined,
     goal: (s.goal && String(s.goal).trim()) || 'general fitness',
     level: (s.level && String(s.level).trim()) || 'beginner',
     constraints: (s.constraints && String(s.constraints).trim()) || 'none',
-    daysPerWeek: (typeof s.daysPerWeek === 'number') ? s.daysPerWeek : 3,
     durationMin: (typeof s.durationMin === 'number') ? s.durationMin : 15,
     equipment: (Array.isArray(s.equipment) && s.equipment.length) ? s.equipment : ['bodyweight'],
   };
 
-  // 5) Call Gemini with retry + fallbacks
   if (!process.env.GEMINI_API_KEY) {
     const e = new Error('Missing GEMINI_API_KEY');
-    e.status = 500; throw e;
-  }
-
-  const fallbacks = [
-    MODEL,                // env/default: 'gemini-2.5-flash'
-    'gemini-1.5-flash',   // fast fallback
-    'gemini-1.5-pro'      // stronger fallback
-  ].filter(Boolean);
-
-  let raw = '{}';
-  try {
-    const { text /*, usedModel*/ } = await callGeminiWithRetry({
-      apiKey: process.env.GEMINI_API_KEY,
-      modelNames: fallbacks,
-      systemInstruction: systemPlan,
-      payload: spec,
-      tries: 5,
-      baseDelay: 700
-    });
-    raw = text;
-    // console.log('[gemini] used model:', usedModel);
-  } catch (e) {
-    s.state = 'ERROR'; await s.save();
+    e.status = 500;
     throw e;
   }
 
-  // 6) Parse JSON strictly
+  const { GoogleGenerativeAI } = await import('@google/generative-ai');
+  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+  const model = genAI.getGenerativeModel({ model: MODEL, systemInstruction: systemPlan });
+
+  const result = await model.generateContent(JSON.stringify(spec));
+  const raw = (result && result.response && typeof result.response.text === 'function')
+    ? result.response.text()
+    : '{}';
+
   let plan;
-  try { plan = JSON.parse(raw); }
-  catch {
-    const i = raw.indexOf('{'), j = raw.lastIndexOf('}');
+  try {
+    plan = JSON.parse(raw);
+  } catch {
+    const i = raw.indexOf('{');
+    const j = raw.lastIndexOf('}');
     plan = JSON.parse(raw.slice(i, j + 1));
   }
 
-  // 7) Save + mark ready
+  // normalize to 1 week + exactly N days (truncate if too many)
+  plan = plan || {};
+  plan.weeks = 1;
+  plan.daysPerWeek = targetDays;
+  if (!Array.isArray(plan.plan)) plan.plan = [];
+  if (plan.plan.length > targetDays) plan.plan = plan.plan.slice(0, targetDays);
+
   s.plan = plan;
   s.state = 'PLAN_READY';
   await s.save();
 
   return { plan, uid };
 }
-
-/* ---------- Routes ---------- */
 
 // POST /ai/plan
 router.post('/plan', async (req, res) => {
@@ -215,7 +218,7 @@ router.post('/plan', async (req, res) => {
   }
 });
 
-// GET /ai/plan (convenience)
+// GET /ai/plan  (convenience)
 router.get('/plan', async (req, res) => {
   let uid;
   try {
