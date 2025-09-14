@@ -146,8 +146,54 @@ function coerceSpecFromBodyOrDefaults(body = {}) {
     level: (body.level || 'beginner').toString(),
     constraints: (body.constraints || 'none').toString(),
     durationMin: duration,
-    equipment: eq.length ? eq : ['bodyweight']
+    equipment: eq.length ? eq : ['bodyweight'] // blank -> safe home workouts
   };
+}
+
+/* ----- deterministic rules helpers (no randomness) ----- */
+function titleCase(s='') {
+  return String(s).replace(/[_-]+/g,' ')
+    .replace(/\w\S*/g, t => t[0].toUpperCase() + t.slice(1).toLowerCase());
+}
+
+function parseConstraints(cstr='') {
+  const s = String(cstr || '').toLowerCase();
+  return {
+    none: !s || s === 'none',
+    knee: /knee|patell|menisc|chondromalacia|acl|mcl|it\s*band/.test(s),
+    back: /back|spine|disc|sciatica|lumbar|herniat/.test(s),
+    shoulder: /shoulder|rotator|labrum|imping/.test(s),
+    wrist: /wrist|carpal/.test(s),
+    ankle: /ankle|achilles|sprain/.test(s),
+    hypertension: /hypertension|high\s*blood\s*pressure|bp\b/.test(s),
+    osteo: /osteoporosis|low\s*bone/.test(s),
+    pregnant: /pregnan/.test(s),
+  };
+}
+
+function getEquipTier(list) {
+  const L = (Array.isArray(list) ? list : [list]).map(x => String(x||'').toLowerCase());
+  if (L.some(x => /(barbell|rack|bench|cable|smith|gym)/.test(x))) return 'gym';
+  if (L.some(x => /(dumbbell|kettlebell|kb|band|resistance|loop)/.test(x))) return 'min';
+  return 'bw'; // default: bodyweight/home-safe
+}
+
+function allowed(ex, flags, tier) {
+  // equipment gate
+  if (tier === 'bw'  && ex.equip !== 'bw')  return false;
+  if (tier === 'min' && ex.equip === 'gym') return false;
+  // health implication gates
+  if (Array.isArray(ex.avoid) && ex.avoid.some(tag => flags[tag])) return false;
+  return true;
+}
+
+function firstAllowed(arr, flags, tier, n=1) {
+  const out = [];
+  for (const ex of arr) {
+    if (allowed(ex, flags, tier)) out.push(ex);
+    if (out.length >= n) break;
+  }
+  return out;
 }
 
 /* Inject media links so every workout has a YouTube/GIF destination */
@@ -170,53 +216,237 @@ function addMediaLinks(plan) {
   return plan;
 }
 
-/* Fallback offline plan so UX never blocks */
+/* ---------- Deterministic, condition-aware offline plan ---------- */
 function offlinePlan(spec) {
-  const { daysPerWeek = 1, durationMin = 10, goal = 'general fitness' } = spec || {};
-  const pools = {
-    general:   ['Bodyweight Squats', 'Push-ups (on knees or full)', 'Plank', 'Glute Bridges', 'Reverse Lunges', 'Superman Hold'],
-    core:      ['Crunches', 'Dead Bug', 'Russian Twists', 'Plank', 'Side Plank', 'Leg Raises'],
-    mobility:  ['Cat-Cow', 'World’s Greatest Stretch', 'Thoracic Rotations', 'Hip Flexor Stretch', 'Hamstring Stretch', 'Child’s Pose'],
-    endurance: ['Jumping Jacks', 'High Knees', 'Mountain Climbers', 'Skater Hops', 'Butt Kicks', 'Burpees (modified)'],
-    strength:  ['Bodyweight Squats', 'Split Squats', 'Push-ups', 'Glute Bridges', 'Inverted Rows (table)', 'Hip Hinge'],
-  };
-  const bucket =
-    /core/.test(goal) ? pools.core :
-    /mobility|flex/.test(goal) ? pools.mobility :
-    /endurance|cardio/.test(goal) ? pools.endurance :
-    /muscle|strength/.test(goal) ? pools.strength : pools.general;
+  const {
+    daysPerWeek = 1,
+    durationMin = 10,
+    goal = 'general fitness',
+    level = 'beginner',
+    age,
+    constraints = 'none',
+    equipment = ['bodyweight'],
+  } = spec || {};
 
-  const pick3 = (arr) => arr.slice(0, 3);
-  const days = [];
-  for (let d = 1; d <= daysPerWeek; d++) {
-    const workout = pick3(bucket).map((name, i) => ({
-      exercise: name,
-      sets: 2,
-      reps: (name.toLowerCase().includes('plank') || name.toLowerCase().includes('hold')) ? '20–40s hold' : (i === 0 ? '10–15' : '8–12'),
-      rir: 1,
-    }));
-    days.push({
-      day: `Day ${d} - ${String(goal).replace(/_/g,' ').replace(/\b\w/g,s=>s.toUpperCase())}`,
+  const flags = parseConstraints(constraints);
+  const tier  = getEquipTier(equipment);
+
+  // Exercise library with equipment & contraindication flags
+  const LIB = {
+    squat: [
+      { name:'Sit-to-Stand (chair)', equip:'bw',  avoid:[] },
+      { name:'Box Squat to Chair',   equip:'bw',  avoid:[] },
+      { name:'Bodyweight Squat (comfortable depth)', equip:'bw', avoid:['knee'] },
+      { name:'Step-ups (low step)',  equip:'bw',  avoid:['knee'] },
+      { name:'Reverse Lunge (short stride)', equip:'bw', avoid:['knee'] },
+      { name:'Goblet Squat',         equip:'min', avoid:['knee'] },
+      { name:'Back Squat',           equip:'gym', avoid:['knee','osteo'] },
+    ],
+    hinge: [
+      { name:'Glute Bridge',                   equip:'bw',  avoid:[] },
+      { name:'Hip Hinge w/ Broomstick',       equip:'bw',  avoid:['back'] },
+      { name:'Bird Dog',                       equip:'bw',  avoid:[] },
+      { name:'Romanian Deadlift (dumbbells)',  equip:'min', avoid:['back','osteo'] },
+      { name:'Barbell RDL',                    equip:'gym', avoid:['back','osteo'] },
+    ],
+    push: [
+      { name:'Wall Push-up',                   equip:'bw',  avoid:[] },
+      { name:'Incline Push-up (bench/table)',  equip:'bw',  avoid:[] },
+      { name:'Push-up',                        equip:'bw',  avoid:['shoulder','wrist'] },
+      { name:'Dumbbell Floor Press',           equip:'min', avoid:['shoulder'] },
+      { name:'Barbell Bench Press',            equip:'gym', avoid:['shoulder','osteo'] },
+    ],
+    pull: [
+      { name:'Table Inverted Row',         equip:'bw',  avoid:[] },
+      { name:'Towel Row (door anchor)',    equip:'bw',  avoid:[] },
+      { name:'Band Row',                   equip:'min', avoid:[] },
+      { name:'One-Arm Dumbbell Row',       equip:'min', avoid:[] },
+      { name:'Lat Pulldown',               equip:'gym', avoid:[] },
+      { name:'Barbell Row',                equip:'gym', avoid:['back','osteo'] },
+    ],
+    core: [
+      { name:'Dead Bug',             equip:'bw',  avoid:[] },
+      { name:'Bird Dog',             equip:'bw',  avoid:[] },
+      { name:'Side Plank (knees)',   equip:'bw',  avoid:['hypertension','shoulder'] },
+      { name:'Pallof Press (band)',  equip:'min', avoid:[] },
+      { name:'Front Plank',          equip:'bw',  avoid:['shoulder','hypertension'] },
+    ],
+    endurance: [
+      { name:'March in Place (brisk)',                 equip:'bw',  avoid:[] },
+      { name:'Step Jacks (low impact)',                equip:'bw',  avoid:['knee'] },
+      { name:'Shadow Boxing',                          equip:'bw',  avoid:[] },
+      { name:'Low-Impact Mountain Climbers (elevated)',equip:'bw',  avoid:['wrist','knee'] },
+      { name:'Fast Walk (indoor/outdoor)',             equip:'bw',  avoid:[] },
+    ],
+    mobility: [
+      { name:'Cat-Cow',                         equip:'bw', avoid:[] },
+      { name:'Thoracic Openers (book openers)', equip:'bw', avoid:[] },
+      { name:'Hip Flexor Stretch (gentle)',     equip:'bw', avoid:[] },
+      { name:'Ankle Circles',                   equip:'bw', avoid:[] },
+      { name:'Hamstring Stretch (strap/towel)', equip:'bw', avoid:[] },
+    ],
+    balance: [
+      { name:'Tandem Stance (support nearby)', equip:'bw', avoid:[] },
+      { name:'Heel-to-Toe Walk',               equip:'bw', avoid:[] },
+      { name:'Single-Leg Balance (support)',   equip:'bw', avoid:['ankle'] },
+      { name:'Calf Raises (counter support)',  equip:'bw', avoid:[] },
+    ],
+  };
+
+  // Volume & progress knobs
+  const lvl = String(level).toLowerCase();
+  const sets =
+    lvl.includes('advanced')     ? 4 :
+    lvl.includes('intermediate') ? 3 : 2;
+
+  const isOlder = Number(age) >= 55;
+  const repMain = isOlder ? '8–12' : (lvl.includes('advanced') ? '10–15' : '8–12');
+  const repAux  = isOlder ? '8–10' : '10–12';
+  const holdCore= flags.hypertension ? '10–20s' : (isOlder ? '15–25s' : '20–30s');
+  const rir     = flags.hypertension || isOlder ? 2 : (lvl.includes('advanced') ? 1 : 2);
+
+  // Warmup & cooldown
+  const warmup = [
+    '2 min brisk march',
+    flags.back ? 'Cat-Cow x8' : 'Hip Hinge Drill x8',
+    'Arm Circles x10/dir',
+  ].join(', ');
+
+  const cooldown = [
+    'Calf & Quad Stretch 30s/side',
+    flags.back ? 'Child’s Pose 30s' : 'Hamstring Stretch 30s/side',
+    'Deep breaths (no breath-holding)',
+  ].join(', ');
+
+  // Day builders
+  function buildStrengthDay(idx) {
+    const list = [];
+    list.push(...firstAllowed(LIB.squat, flags, tier, 1));
+    list.push(...firstAllowed(LIB.push,  flags, tier, 1));
+    list.push(...firstAllowed(LIB.hinge, flags, tier, 1));
+
+    const pulls = firstAllowed(LIB.pull, flags, tier, 1);
+    if (pulls.length) list.push(...pulls);
+    else list.push(...firstAllowed(LIB.core, flags, tier, 1));
+
+    const cores = firstAllowed(LIB.core, flags, tier, 1);
+    if (cores.length) list.push(...cores);
+
+    return {
+      day: `Day ${idx} - ${titleCase(goal) || 'Strength'}`,
       durationMin,
-      warmup: '1 min: Cat-Cow (30s), Arm Circles (30s)',
-      workout,
-      cooldown: '1 min: Quad Stretch (30s/side), Hamstring Stretch (30s)'
-    });
+      warmup,
+      workout: list.slice(0, 5).map(ex => ({
+        exercise: ex.name,
+        sets,
+        reps: /Plank|Dead Bug|Bird Dog|Pallof/.test(ex.name) ? holdCore : (/Row|Press|Push|Squat|Lunge|Hinge|Bridge|Step|RDL/i.test(ex.name) ? repMain : repAux),
+        rir
+      })),
+      finisher: tier === 'bw' ? 'Optional: 2 min brisk march + step-ups (low box) x20 total' : 'Optional: 2 min brisk march',
+      cooldown
+    };
   }
+
+  function buildEnduranceDay(idx) {
+    const moves = [
+      ...firstAllowed(LIB.endurance, flags, tier, 3),
+      ...firstAllowed(LIB.core, flags, tier, 1),
+    ].slice(0, 4);
+
+    return {
+      day: `Day ${idx} - Low-Impact Cardio`,
+      durationMin,
+      warmup,
+      workout: moves.map(ex => ({
+        exercise: ex.name,
+        sets,
+        reps: '30–45s',
+        rir: 2
+      })),
+      finisher: '2 min shadow boxing or fast walk',
+      cooldown
+    };
+  }
+
+  function buildMobilityDay(idx) {
+    const mobs = firstAllowed(LIB.mobility, flags, tier, 4);
+    const bal  = firstAllowed(LIB.balance,  flags, tier, 1);
+    return {
+      day: `Day ${idx} - Mobility & Balance`,
+      durationMin,
+      warmup: 'Gentle joint circles, easy march',
+      workout: [...mobs, ...bal].map(ex => ({
+        exercise: ex.name,
+        sets: 2,
+        reps: '30–45s',
+        rir: 3
+      })),
+      finisher: 'Nasal breathing walk 2–3 min',
+      cooldown
+    };
+  }
+
+  function buildCoreDay(idx) {
+    const cores = firstAllowed(LIB.core, flags, tier, 3);
+    const glute = firstAllowed(LIB.hinge, flags, tier, 1);
+    return {
+      day: `Day ${idx} - Core & Glutes`,
+      durationMin,
+      warmup,
+      workout: [...cores, ...glute].map(ex => ({
+        exercise: ex.name,
+        sets,
+        reps: /Dead Bug|Bird Dog/.test(ex.name) ? '8–10/side' : holdCore,
+        rir
+      })),
+      finisher: 'Suitcase hold 20–30s/side if safe (skip if hypertension)',
+      cooldown
+    };
+  }
+
+  // Builder rotation by goal
+  const g = String(goal).toLowerCase();
+  const builders = g.includes('endurance') || g.includes('cardio')
+    ? [buildEnduranceDay, buildStrengthDay, buildEnduranceDay, buildCoreDay]
+    : g.includes('mobility') || g.includes('flex')
+    ? [buildMobilityDay, buildStrengthDay, buildMobilityDay, buildCoreDay]
+    : g.includes('core')
+    ? [buildCoreDay, buildStrengthDay, buildCoreDay, buildMobilityDay]
+    : g.includes('muscle') || g.includes('strength')
+    ? [buildStrengthDay, buildStrengthDay, buildCoreDay, buildMobilityDay]
+    : [buildStrengthDay, buildCoreDay, buildEnduranceDay, buildMobilityDay]; // general fitness
+
+  const planDays = [];
+  for (let d = 1; d <= daysPerWeek; d++) {
+    const builder = builders[(d - 1) % builders.length];
+    planDays.push(builder(d));
+  }
+
   return {
     weeks: 1,
     daysPerWeek,
-    plan: days,
-    progression: 'Add 1 rep each session; when easy, add a 3rd set.',
-    medicalNote: 'Stop anything painful; keep movements controlled.',
-    meta: { source: 'fallback', model: null }
+    plan: planDays,
+    progression: isOlder
+      ? 'Add a rep every other session; prioritize range of motion and stability.'
+      : 'Add 1–2 reps or 1 set when all sets feel smooth; progress to harder variations.',
+    medicalNote: flags.none
+      ? 'Move with control; stop any exercise that causes pain.'
+      : 'Program adjusted for your notes (e.g., joints/BP). Keep breaths smooth; stop anything painful.',
+    meta: { source: 'rules', model: null, tier, flags },
   };
 }
 
-/* Resilient Gemini caller with retries + model fallback */
+/* =========================
+   Gemini caller w/ retries
+   ========================= */
 async function callGemini(spec) {
+  // Force deterministic engine if requested
+  if (process.env.PLAN_ENGINE === 'rules') {
+    return addMediaLinks(offlinePlan(spec));
+  }
+
   if (!process.env.GEMINI_API_KEY) {
-    // No key provided – return offline plan (keeps UX working)
+    // No key provided – deterministic plan keeps UX working
     return addMediaLinks(offlinePlan(spec));
   }
 
@@ -325,7 +555,7 @@ async function generateAndSavePlan(req) {
 
   let plan = await callGemini(spec);
 
-  // belt & suspenders: ensure media links are present
+  // ensure media links are present
   plan = addMediaLinks(plan);
 
   s.plan = plan;
@@ -354,7 +584,7 @@ async function generateGuestPlan(req) {
 
   let plan = await callGemini(spec);
 
-  // normalize/truncate already done in callGemini; just ensure media links
+  // ensure media links
   plan = addMediaLinks(plan);
 
   req.session.guestPlan = plan;
