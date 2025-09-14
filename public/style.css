@@ -8,21 +8,8 @@ pre { white-space: pre-wrap; }
       --footer-h: 0px;
     }
 
-    html, body { height: 100%; }
-    body {
-      display: flex;
-      flex-direction: column;
-      min-height: 100vh;
-      /* keeps content from hiding under fixed navbar */
-      padding-top: var(--nav-h);
-      background-color: #111827; /* same as bg-dark */
-      color: #f8f9fa;            /* same as text-light */
-    }
-
-    /* main stretches between nav and footer */
-    main {
-      flex: 1 1 auto;
-      min-height: calc(100vh - var(--nav-h) - var(--footer-h));
-    }
-
-    footer { flex-shrink: 0; }
+   /* sticky footer baseline */
+html, body { height: 100%; }
+body { display:flex; flex-direction:column; min-height:100vh; }
+main { flex: 1 0 auto; }
+footer { margin-top: auto; } /* or .mt-auto class on <footer> */

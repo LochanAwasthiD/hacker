@@ -1,9 +1,5 @@
 require('dotenv').config();
-// require('../models/user')
 
-// require('../models/session')
-
-// require('../models/tiplog')
 const express = require('express');
 const app = express();
 const mongoose = require('mongoose');
@@ -26,11 +22,10 @@ const passport = require('passport');
   }
 })();
 
-// --- Views (ejs-mate only)
+// --- Views
 app.engine('ejs', ejsMate);
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
-// optional: default layout for all views with ejs-mate
 app.locals._layoutFile = 'layouts/boilerplate.ejs';
 
 // --- Static & parsers
@@ -54,37 +49,33 @@ app.use(session({
   }
 }));
 
-require('./config/passport')(passport);   // <-- after session, before routes
+require('./config/passport')(passport);
 app.use(passport.initialize());
 app.use(passport.session());
 
-// expose user to templates
-app.use((req, res, next) => { res.locals.currentUser = req.user; next(); });
-
-// --- Auth guard
-const ensureAuth = (req, res, next) => req.isAuthenticated() ? next() : res.redirect('/#auth-section');
+// make currentUser + q available to ALL templates (must be BEFORE routes)
+app.use((req, res, next) => {
+  res.locals.currentUser = req.user;
+  res.locals.q = req.query;
+  next();
+});
 
 // --- Routes
+const ensureAuth = (req, res, next) => req.isAuthenticated() ? next() : res.redirect('/#auth-section');
+
 const authRouter = require('./routes/auth');
 const wizardRouter = require('./routes/wizard');
 const aiRouter     = require('./routes/ai');
+const newsletterRouter = require('./routes/newsletter');
 
-app.use('/auth', authRouter);               // login/signup/logout
-app.use('/wizard', ensureAuth, wizardRouter); // wizard flow (protected)
-app.use('/ai', ensureAuth, aiRouter);       // AI features (protected)
+app.use('/newsletter', newsletterRouter);
+app.use('/auth', authRouter);
+app.use('/wizard', ensureAuth, wizardRouter);
+app.use('/ai', ensureAuth, aiRouter);
 
-// homepage
 app.get('/', (req, res) => {
   res.render('microworkout/homepage', { title: 'MicroWorkout' });
 });
-
-///check views dir and file existence
-const fs = require('fs');
-console.log('Views dir ->', app.get('views'));
-console.log('Expect ->', path.join(app.get('views'), 'microworkout', 'homepage.ejs'));
-console.log('Exists? ->', fs.existsSync(path.join(app.get('views'), 'microworkout', 'homepage.ejs')));
-
-
 
 // --- Server
 const port = process.env.PORT || 8080;
