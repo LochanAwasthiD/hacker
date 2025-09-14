@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="/home.css">
 </head>
 <body class="d-flex flex-column min-vh-100"> <!-- ✅ makes sticky footer easy -->
+  <body data-auth="<%= !!currentUser %>"></body>
   <%- include('../include/nav') %>
 
   <main class="container-fluid p-0 flex-grow-1"> <!-- ✅ fills space between nav & footer -->

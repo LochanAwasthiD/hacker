@@ -1,4 +1,4 @@
-
+<!-- 
     <div class="container py-5">
         <div class="row justify-content-center">
             <div class="col-lg-10">
@@ -7,7 +7,7 @@
                     <p class="text-center text-muted mb-5">Here's a personalized plan based on your preferences. Enjoy!</p>
                     
                     <div id="workouts-container">
-                        </div>
+                    </div>
 
                     <div class="text-center mt-5">
                         <button class="btn btn-primary btn-lg rounded-pill px-5" onclick="generateNewWorkout()">Generate New Workout <i data-feather="refresh-cw" class="ms-2"></i></button>
@@ -15,4 +15,59 @@
                 </div>
             </div>
         </div>
+    </div> -->
+
+   <% layout('layouts/boilerplate') %>
+
+<div class="container my-5">
+  <h1 class="mb-3">Your <%= plan.weeks || 4 %>-Week Plan</h1>
+  <p class="text-muted">Days/Week: <strong><%= plan.daysPerWeek || s.daysPerWeek || 3 %></strong></p>
+
+  <% if (plan.medicalNote) { %>
+    <div class="alert alert-warning">⚠️ <%= plan.medicalNote %></div>
+  <% } %>
+
+  <% if (Array.isArray(plan.plan) && plan.plan.length) { %>
+    <div class="vstack gap-4">
+      <% plan.plan.forEach((d,i) => { %>
+        <div class="workout-section">
+          <h4 class="mb-1"><%= d.day || ('Day ' + (i+1)) %></h4>
+          <p class="duration-text">~ <strong><%= d.durationMin || 0 %></strong> min</p>
+
+          <% if (d.warmup) { %><p><strong>Warmup:</strong> <%= d.warmup %></p><% } %>
+          <% if (Array.isArray(d.workout)) { %>
+            <ul>
+              <% d.workout.forEach(w => { %>
+                <li>
+                  <%= w.exercise %>
+                  <% if (w.sets) { %> — <%= w.sets %> sets<% } %>
+                  <% if (w.reps) { %> × <%= w.reps %><% } %>
+                  <% if (typeof w.rir !== 'undefined') { %> (RIR: <%= w.rir %>)<% } %>
+                  <!-- quick video search link -->
+                  <a class="ms-2" target="_blank" rel="noopener"
+                     href="https://www.youtube.com/results?search_query=<%= encodeURIComponent((w.exercise || '') + ' proper form') %>">
+                    video ↗
+                  </a>
+                </li>
+              <% }) %>
+            </ul>
+          <% } %>
+          <% if (d.finisher) { %><p><strong>Finisher:</strong> <%= d.finisher %></p><% } %>
+          <% if (d.cooldown) { %><p><strong>Cooldown:</strong> <%= d.cooldown %></p><% } %>
+        </div>
+      <% }) %>
     </div>
+  <% } else { %>
+    <div class="alert alert-info">No plan details were returned. Try generating again.</div>
+  <% } %>
+
+  <% if (plan.progression) { %>
+    <div class="mt-4 p-3 border rounded">
+      <strong>Progression:</strong> <%= plan.progression %>
+    </div>
+  <% } %>
+
+  <div class="mt-4">
+    <a class="btn btn-outline-light" href="/wizard/fitnessgoal">Make new plan</a>
+  </div>
+</div>

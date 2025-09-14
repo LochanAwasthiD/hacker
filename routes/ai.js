@@ -1,100 +1,119 @@
+// routes/ai.js
 const express = require('express');
-const Session = require('../models/session.js');
-const TipLog = require('../models/TipLog.js');
-
+const Session = require('../models/Session');  // your existing model
 const router = express.Router();
 
 const MODEL = process.env.MODEL || 'gemini-2.5-flash';
 
-const systemTips = `
-You are a concise, safety-first fitness assistant.
-Return markdown with:
-# <Short Title>
-- 3–5 bullet tips (specific to user's goal/level/equipment/time)
-- One line starting with "⚠️ Caution:" if pain/injury is mentioned
-Avoid medical diagnosis. Simple language.
-`;
-
+// Single, strict system prompt for a structured plan
 const systemPlan = `
 You are a workout program generator. Return STRICT JSON only:
 {
-  "weeks": 4,
+  "weeks": <number>,
   "daysPerWeek": <number>,
   "plan": [
     {
-      "day": "Day 1 - Upper Push",
-      "durationMin": 45,
+      "day": "Day 1 - <focus>",
+      "durationMin": <number>,
       "workout": [
-        {"exercise":"Bench Press","sets":4,"reps":"6-8","rir":2}
+        {"exercise":"<name>","sets":<number>,"reps":"<range or number>","rir":<number>}
       ],
-      "finisher":"Incline walk 10 min",
-      "warmup":"5 min dynamic + light sets",
-      "cooldown":"5 min stretch"
+      "finisher":"<short optional>",
+      "warmup":"<short optional>",
+      "cooldown":"<short optional>"
     }
   ],
-  "progression": "Add 2.5–5% load or 1–2 reps weekly if RIR>2; deload in week 4 if needed."
+  "progression": "<1-2 lines>"
 }
-No extra text, JSON only. Tailor to user's goal, level, constraints, equipment.
-If constraints include pain/injury, include "medicalNote":"Consider seeing a professional".
+No extra text. Tailor to goal/level/constraints/equipment/duration. If constraints mention pain or injury, add "medicalNote": "Consider seeing a professional".
 `;
 
-router.post('/tips', async (_req, res) => {
-  const s = await Session.findOne().sort({ createdAt: -1 });
-  if (!s) return res.status(400).json({ ok:false, error:'No session' });
+// POST /ai/plan
+router.post('/plan', async (req, res) => {
+  try {
+    // 1) Find or create a "current" session for this user
+    const userId = req.user?._id;
+    if (!userId) return res.status(401).json({ ok: false, error: 'Not authenticated' });
 
-  const { GoogleGenerativeAI } = await import('@google/generative-ai');
-  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  const model = genAI.getGenerativeModel({ model: MODEL, systemInstruction: systemTips });
+    // Grab latest open session (or create)
+    let s = await Session.findOne({ user: userId }).sort({ createdAt: -1 });
+    if (!s) s = await Session.create({ user: userId });
 
-  const userPrompt = `
-Goal: ${s.goal || 'general fitness'}
-Level: ${s.level}
-Constraints: ${s.constraints || 'none'}
-Days/Week: ${s.daysPerWeek || 3}
-Equipment: ${s.equipment?.join(', ') || 'bodyweight'}
-Return format as instructed.
-`;
+    // 2) Merge any inputs sent now (body) into session and persist
+    const patch = {};
+    [
+      'name', 'age', 'goal', 'level', 'constraints',
+      'daysPerWeek', 'durationMin'
+    ].forEach(k => {
+      if (req.body[k] !== undefined && req.body[k] !== null && String(req.body[k]).trim() !== '') {
+        patch[k] = k === 'age' || k === 'daysPerWeek' || k === 'durationMin' ? Number(req.body[k]) : String(req.body[k]);
+      }
+    });
 
-  const result = await model.generateContent(userPrompt);
-  const text = result.response.text() || '';
-  const lines = text.split('\n').map(t=>t.trim()).filter(Boolean);
+    // equipment can be array or CSV
+    if (req.body.equipment !== undefined) {
+      const eq = Array.isArray(req.body.equipment)
+        ? req.body.equipment
+        : String(req.body.equipment).split(',').map(x => x.trim()).filter(Boolean);
+      patch.equipment = eq;
+    }
 
-  s.tips = lines;
-  await s.save();
-  try { await TipLog.create({ goal:s.goal, level:s.level, constraints:s.constraints, responseRaw:text, tips:lines.slice(0,10) }); } catch {}
+    if (Object.keys(patch).length) {
+      Object.assign(s, patch);
+      await s.save();
+    }
 
-  res.json({ ok:true, content: lines });
-});
+    // 3) Build spec from DB (single source of truth)
+    const spec = {
+      userName: s.name || req.user.name || 'friend',
+      age: s.age || undefined,
+      goal: s.goal || 'general fitness',
+      level: s.level || 'beginner',
+      constraints: s.constraints || 'none',
+      daysPerWeek: s.daysPerWeek || 3,
+      durationMin: s.durationMin || 15,
+      equipment: (s.equipment && s.equipment.length) ? s.equipment : ['bodyweight']
+    };
 
-router.post('/plan', async (_req, res) => {
-  const s = await Session.findOne().sort({ createdAt: -1 });
-  if (!s) return res.status(400).json({ ok:false, error:'No session' });
+    // 4) Call Gemini
+    const { GoogleGenerativeAI } = await import('@google/generative-ai');
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({
+      model: MODEL,
+      systemInstruction: systemPlan
+    });
 
-  const { GoogleGenerativeAI } = await import('@google/generative-ai');
-  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  const model = genAI.getGenerativeModel({ model: MODEL, systemInstruction: systemPlan });
+    const result = await model.generateContent(JSON.stringify(spec));
+    const raw = result.response.text() || '{}';
 
-  const spec = {
-    goal: s.goal || 'general fitness',
-    level: s.level,
-    constraints: s.constraints || 'none',
-    daysPerWeek: s.daysPerWeek || 3,
-    equipment: s.equipment?.length ? s.equipment : ['bodyweight']
-  };
+    // 5) Parse JSON strictly, with a safe fallback if the model added noise
+    let plan;
+    try {
+      plan = JSON.parse(raw);
+    } catch {
+      const i = raw.indexOf('{'), j = raw.lastIndexOf('}');
+      plan = JSON.parse(raw.slice(i, j + 1));
+    }
 
-  const result = await model.generateContent(JSON.stringify(spec));
-  const raw = result.response.text() || '{}';
+    // 6) Save plan → session, mark as done
+    s.plan = plan;
+    s.state = 'PLAN_READY';
+    await s.save();
 
-  let plan;
-  try { plan = JSON.parse(raw); }
-  catch {
-    const i = raw.indexOf('{'), j = raw.lastIndexOf('}');
-    plan = JSON.parse(raw.slice(i, j+1));
+    // 7) If called via fetch: return JSON. If form-nav, redirect.
+    const wantsJSON = req.headers.accept?.includes('application/json') || req.xhr;
+    if (wantsJSON) {
+      return res.json({ ok: true, plan });
+    }
+    return res.redirect('/wizard/output');
+  } catch (err) {
+    console.error('AI plan error:', err);
+    // Friendly JSON for fetch; redirect for forms
+    if (req.headers.accept?.includes('application/json') || req.xhr) {
+      return res.status(500).json({ ok: false, error: 'Could not generate plan. Try again.' });
+    }
+    return res.redirect('/wizard/fitnessgoal?msg=plan_error');
   }
-
-  s.plan = plan;
-  await s.save();
-  res.json({ ok:true, plan });
 });
 
 module.exports = router;

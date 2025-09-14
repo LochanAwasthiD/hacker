@@ -10,6 +10,7 @@ const session = require('express-session');
 const MongoStore = require('connect-mongo');
 const passport = require('passport');
 
+
 // --- DB
 (async function main() {
   try {
@@ -33,6 +34,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(rateLimit({ windowMs: 60_000, max: 40 }));
+
 
 // --- Session + Passport
 const mongoUrl = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/microworkout';

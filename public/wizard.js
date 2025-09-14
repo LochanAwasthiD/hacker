@@ -57,4 +57,73 @@ document.addEventListener('DOMContentLoaded', () => {
       btnGenPlan.disabled = false;
     });
   }
-});
+
+
+
+  
+});// public/wizard.js
+(() => {
+  const isAuthed = () => document.body.dataset.auth === 'true';
+
+  // Attach click to cards that set level (require data-level attr)
+  document.querySelectorAll('[data-level]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (!isAuthed()) {
+        alert('Please log in to continue.');
+        window.location.href = '/#auth-section';
+        return;
+      }
+      const level = el.getAttribute('data-level');
+      const f = document.createElement('form');
+      f.method = 'POST'; f.action = '/wizard/fitness-level';
+      f.innerHTML = `<input type="hidden" name="level" value="${level}">`;
+      document.body.appendChild(f); f.submit();
+    });
+  });
+
+  // Generate plan button (collects any last inputs you keep in localStorage)
+  const genBtn = document.getElementById('btnGenPlan');
+  if (genBtn) {
+    genBtn.addEventListener('click', async () => {
+      if (!isAuthed()) {
+        alert('Log in to generate your plan.');
+        window.location.href = '/#auth-section';
+        return;
+      }
+      genBtn.disabled = true;
+      genBtn.textContent = 'Generating...';
+
+      try {
+        const spec = {
+          // optional: if you cached anything client side
+          goal:        localStorage.getItem('mw_goal') || undefined,
+          level:       localStorage.getItem('mw_level') || undefined,
+          constraints: localStorage.getItem('mw_constraints') || undefined,
+          daysPerWeek: localStorage.getItem('mw_days') || undefined,
+          durationMin: localStorage.getItem('mw_duration') || undefined,
+          equipment:   localStorage.getItem('mw_equipment') || undefined
+        };
+
+        const res = await fetch('/ai/plan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify(spec)
+        });
+
+        if (!res.ok) throw new Error('Plan API failed');
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || 'Plan failed');
+
+        // Server saved plan in DB; now go show it
+        window.location.href = '/wizard/output';
+      } catch (err) {
+        console.error(err);
+        alert('Could not generate plan right now. Please try again.');
+      } finally {
+        genBtn.disabled = false;
+        genBtn.textContent = 'Generate Plan';
+      }
+    });
+  }
+})();

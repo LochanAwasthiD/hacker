@@ -1,15 +1,20 @@
+// models/Session.js
 const mongoose = require('mongoose');
 
 const SessionSchema = new mongoose.Schema({
-  state: { type: String, enum: ['INTAKE','TIPS','PLAN','DONE'], default: 'INTAKE' },
+  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true, required: true },
+  // captured inputs:
+  name: String,
+  age: Number,
   goal: String,
-  level: { type: String, enum: ['beginner','intermediate','advanced'], default: 'beginner' },
+  level: String,
   constraints: String,
-  daysPerWeek: { type: Number, default: 3 },
+  daysPerWeek: Number,
+  durationMin: Number,
   equipment: [String],
-  tips: [String],
-  plan: Object,
-  createdAt: { type: Date, default: Date.now }
-});
+  // AI output:
+  plan: mongoose.Schema.Types.Mixed,
+  state: { type: String, default: 'INTAKE' }
+}, { timestamps: true });
 
 module.exports = mongoose.models.Session || mongoose.model('Session', SessionSchema);
